@@ -61,7 +61,9 @@ async def convert_pdf_to_markdown(pdf_path: Path) -> str:
     relative_path = f"pptx-briefs/{unique_name}"
 
     shutil.copy2(pdf_path, destination)
-    logger.info("Staged PDF for MCP conversion: {}", relative_path)
+    if not destination.exists():
+        raise ValueError(f"Failed to stage PDF in MCP workspace: {destination}")
+    logger.info("Staged PDF for MCP conversion at {} ({})", relative_path, destination)
 
     try:
         async with streamable_http_client(settings.pdf_mcp_url) as (read_stream, write_stream, _):

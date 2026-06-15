@@ -182,6 +182,16 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
       </div>
       <ModelSelector value={synthesisModel} onChange={handleSynthesisModelChange} allowCloud={allowCloud} />
       <div className="field">
+        <label htmlFor="topic">Topic / details</label>
+        <textarea
+          id="topic"
+          className="textarea-md"
+          value={topic}
+          onChange={(event) => setTopic(event.target.value)}
+          placeholder="Main subject and any context the model should know…"
+        />
+      </div>
+      <div className="field">
         <label>Source documents (optional)</label>
         <p className="field-hint">
           Upload one or more PDFs to ground slide content in source facts. The extracted text is not used as the brief.

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   deleteTemplate,
   listTemplates,
@@ -18,7 +18,10 @@ export function TemplateLibrary({ selectedId, onSelect, onModeHint }: Props) {
   const [name, setName] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [status, setStatus] = useState("");
+  const [statusIsError, setStatusIsError] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
     const payload = await listTemplates();
@@ -34,27 +37,53 @@ export function TemplateLibrary({ selectedId, onSelect, onModeHint }: Props) {
   }, [onModeHint, onSelect, selectedId]);
 
   useEffect(() => {
-    refresh().catch((err: Error) => setStatus(err.message));
+    refresh().catch((err: Error) => {
+      setStatus(err.message);
+      setStatusIsError(true);
+    });
   }, [refresh]);
 
-  async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
+  function setInfoStatus(message: string) {
+    setStatus(message);
+    setStatusIsError(false);
+  }
+
+  function setErrorStatus(message: string) {
+    setStatus(message);
+    setStatusIsError(true);
+  }
+
+  function handleFileSelect(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    if (!file) return;
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+    setPendingFile(file);
+    setInfoStatus(`Selected ${file.name}. Enter a name and click Save to library.`);
+  }
+
+  async function handleSave() {
+    if (!pendingFile) {
+      setErrorStatus("Choose a .pptx or .md template file first.");
+      return;
+    }
     if (!name.trim()) {
-      setStatus("Enter a template name before uploading.");
+      setErrorStatus("Enter a template name before saving.");
       return;
     }
     setBusy(true);
     try {
-      await registerTemplate(name.trim(), file, isDefault);
-      setStatus(`Registered template "${name.trim()}"`);
+      await registerTemplate(name.trim(), pendingFile, isDefault);
+      setInfoStatus(`Saved template "${name.trim()}" to library`);
       setName("");
+      setPendingFile(null);
+      setIsDefault(false);
       await refresh();
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Upload failed");
+      setErrorStatus(err instanceof Error ? err.message : "Save failed");
     } finally {
       setBusy(false);
-      event.target.value = "";
     }
   }
 
@@ -63,10 +92,10 @@ export function TemplateLibrary({ selectedId, onSelect, onModeHint }: Props) {
     setBusy(true);
     try {
       await setDefaultTemplate(selectedId);
-      setStatus("Default template updated.");
+      setInfoStatus("Default template updated.");
       await refresh();
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Failed");
+      setErrorStatus(err instanceof Error ? err.message : "Failed");
     } finally {
       setBusy(false);
     }
@@ -77,11 +106,11 @@ export function TemplateLibrary({ selectedId, onSelect, onModeHint }: Props) {
     setBusy(true);
     try {
       await deleteTemplate(selectedId);
-      setStatus("Template deleted.");
+      setInfoStatus("Template deleted.");
       onSelect("");
       await refresh();
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Delete failed");
+      setErrorStatus(err instanceof Error ? err.message : "Delete failed");
     } finally {
       setBusy(false);
     }
@@ -130,8 +159,35 @@ export function TemplateLibrary({ selectedId, onSelect, onModeHint }: Props) {
         <label htmlFor="template-default">Set as default</label>
       </div>
       <div className="field">
-        <label htmlFor="template-file">Upload .pptx or .md template</label>
-        <input id="template-file" type="file" accept=".pptx,.md" onChange={handleUpload} disabled={busy} />
+        <label>Template file</label>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pptx,.md,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown"
+          hidden
+          onChange={handleFileSelect}
+        />
+        <div className="btn-row">
+          <button
+            type="button"
+            className="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={busy}
+          >
+            Choose file
+          </button>
+          <button
+            type="button"
+            className="primary"
+            onClick={handleSave}
+            disabled={busy || !pendingFile || !name.trim()}
+          >
+            {busy ? "Saving…" : "Save to library"}
+          </button>
+        </div>
+        <p className="field-help subtle">
+          {pendingFile ? `Selected: ${pendingFile.name}` : "Accepts .pptx and .md templates"}
+        </p>
       </div>
       <div className="btn-row">
         <button type="button" className="outline" onClick={handleSetDefault} disabled={!selectedId || busy}>
@@ -141,7 +197,9 @@ export function TemplateLibrary({ selectedId, onSelect, onModeHint }: Props) {
           Delete
         </button>
       </div>
-      <p className="status">{status || `${templates.length} template(s) in library`}</p>
+      <p className={`status${statusIsError ? " error" : ""}`}>
+        {status || `${templates.length} template(s) in library`}
+      </p>
     </section>
   );
 }

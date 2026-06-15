@@ -21,7 +21,7 @@ services:
       - pptx-data:/data
       - ../documentation:/app/documentation:ro
       - ../credentials:/app/credentials:ro
-      - ../pdf/mcp-workspace:/pdf-mcp-workspace
+      - ../../pdf/mcp-workspace:/pdf-mcp-workspace
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

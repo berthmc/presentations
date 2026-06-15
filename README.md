@@ -1,4 +1,4 @@
-# PPTX Generation Engine
+# Presentations@Carmélites
 
 Local-first LLM-powered PowerPoint generation with Material Design 3 styling, template fidelity, and visual QA.
 
@@ -42,7 +42,7 @@ cd frontend; npm run dev    # http://localhost:8091
 ### Docker
 
 ```powershell
-docker compose -f docker/docker-compose.yml up --build
+docker compose -f presentations/docker-compose.yml up --build
 ```
 
 - API: http://localhost:8090 (OpenAPI at `/docs`)

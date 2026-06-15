@@ -1,1 +1,1 @@
-"""Tests for the PPTX generation engine."""
+"""Tests for Presentations@Carmélites."""

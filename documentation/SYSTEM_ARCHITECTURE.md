@@ -4,7 +4,7 @@ This document describes the **implemented** system. The original product specifi
 
 ## Overview
 
-The PPTX Generation Engine is a local-first service that turns a content brief (and optional template) into a PowerPoint deck with Material Design 3 styling and optional visual QA.
+Presentations@Carmélites is a local-first service that turns a content brief (and optional template) into a PowerPoint deck with Material Design 3 styling and optional visual QA.
 
 ```mermaid
 flowchart TD
@@ -103,8 +103,8 @@ Detected automatically (or overridden via `HARDWARE_PROFILE`):
 
 | Service | Image | Port | Notes |
 |---------|-------|------|-------|
-| `pptx-api` | `docker/Dockerfile` | 8090 | Python API + MCP at `/mcp` |
-| `pptx-ui` | `docker/Dockerfile.ui` | 8091 | nginx serves React build; proxies `/api/` → `pptx-api:8090` |
+| `pptx-api` | `presentations/Dockerfile` | 8090 | Python API + MCP at `/mcp` |
+| `pptx-ui` | `presentations/Dockerfile.ui` | 8091 | nginx serves React build; proxies `/api/` → `pptx-api:8090` |
 
 Shared volume: `pptx-data` mounted at `/data`.
 

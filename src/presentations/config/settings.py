@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     ollama_num_ctx: int = Field(default=16384, alias="OLLAMA_NUM_CTX")
     ollama_temperature: float = Field(default=0.1, alias="OLLAMA_TEMPERATURE")
     ollama_max_source_context_chars: int = Field(default=4000, alias="OLLAMA_MAX_SOURCE_CONTEXT_CHARS")
+    ollama_read_timeout_generate: float = Field(default=300.0, alias="OLLAMA_READ_TIMEOUT_GENERATE")
+    ollama_read_timeout_vlm: float = Field(default=300.0, alias="OLLAMA_READ_TIMEOUT_VLM")
 
     google_cloud_project: str = Field(default="", alias="GOOGLE_CLOUD_PROJECT")
     google_cloud_location: str = Field(default="europe-west1", alias="GOOGLE_CLOUD_LOCATION")
