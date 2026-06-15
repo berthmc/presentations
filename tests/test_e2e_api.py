@@ -30,6 +30,25 @@ async def test_templates_and_health_endpoints() -> None:
 
 
 @pytest.mark.asyncio
+async def test_qa_slide_image_endpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import presentations.config.settings as settings_module
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    settings_module._settings = None
+    settings = settings_module.get_settings()
+    deck_dir = settings.qa_dir / "demo-deck"
+    deck_dir.mkdir(parents=True, exist_ok=True)
+    image = deck_dir / "slide-01.jpg"
+    image.write_bytes(b"fakejpeg")
+
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/qa/slides/demo-deck/slide-01.jpg")
+        assert response.status_code == 200
+        assert response.content == b"fakejpeg"
+
+
+@pytest.mark.asyncio
 async def test_generate_with_template_id_uses_registry(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Generate deck with template_id when synthesis is stubbed."""
     import presentations.config.settings as settings_module

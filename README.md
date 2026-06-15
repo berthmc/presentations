@@ -9,16 +9,21 @@ Local-first LLM-powered PowerPoint generation with Material Design 3 styling, te
 - **Markdown templates** (`.md`) with layout placeholders
 - **Local Ollama** synthesis with **Gemini/Vertex** cloud fallback
 - **Visual QA loop**: LibreOffice → PDF → JPEG → VLM + geometric checks
-- **Surfaces**: NiceGUI MD3 web UI, FastAPI REST, **MCP server** for Cursor and Antigravity
+- **Surfaces**: React + Vite MD3 web UI, FastAPI REST, **MCP server** for Cursor and Antigravity
 
 ## Quick start
 
 ```powershell
 Copy-Item .env.example .env
-pip install ".[dev]"
+pip install -e ".[dev]"
 cd src/presentations/compile/node; npm install; cd ../../../..
+cd frontend; npm install; cd ..
+
+# Terminal 1 — API
 pptx-api    # http://localhost:8090
-pptx-ui     # http://localhost:8091
+
+# Terminal 2 — React UI (proxies /api -> :8090)
+cd frontend; npm run dev    # http://localhost:8091
 ```
 
 ### Docker

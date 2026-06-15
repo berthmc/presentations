@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from loguru import logger
 
@@ -19,6 +20,19 @@ from presentations.services.template_registry import get_template_registry
 
 app = FastAPI(title="PPTX Generation Engine", version="0.1.0")
 app.mount("/mcp", mcp_server.http_app())
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:8091",
+        "http://127.0.0.1:8091",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.on_event("startup")
@@ -205,6 +219,18 @@ async def download(filename: str) -> FileResponse:
         filename=filename,
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
     )
+
+
+@app.get("/qa/slides/{deck_stem}/{image_name}")
+async def serve_qa_slide(deck_stem: str, image_name: str) -> FileResponse:
+    """Serve rendered QA slide images to the web UI."""
+    settings = get_settings()
+    if ".." in deck_stem or ".." in image_name:
+        raise HTTPException(status_code=400, detail="Invalid path")
+    path = settings.qa_dir / deck_stem / image_name
+    if not path.exists() or not path.is_file():
+        raise HTTPException(status_code=404, detail="Slide image not found")
+    return FileResponse(path, media_type="image/jpeg")
 
 
 def create_app() -> FastAPI:
