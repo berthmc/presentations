@@ -21,7 +21,8 @@ class Settings(BaseSettings):
 
     ollama_host: str = Field(default="http://localhost:11434", alias="OLLAMA_HOST")
     ollama_synthesis_model: str = Field(default="qwen2.5:3b", alias="OLLAMA_SYNTHESIS_MODEL")
-    ollama_vlm_model: str = Field(default="qwen2.5-vl:7b", alias="OLLAMA_VLM_MODEL")
+    ollama_vlm_model: str = Field(default="qwen2.5vl:7b", alias="OLLAMA_VLM_MODEL")
+    ollama_supports_vlm: bool | None = Field(default=None, alias="OLLAMA_SUPPORTS_VLM")
 
     google_cloud_project: str = Field(default="", alias="GOOGLE_CLOUD_PROJECT")
     google_cloud_location: str = Field(default="europe-west1", alias="GOOGLE_CLOUD_LOCATION")

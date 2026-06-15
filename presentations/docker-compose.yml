@@ -1,18 +1,24 @@
+name: presentations
+
 services:
   pptx-api:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: presentations/Dockerfile
     command: api
     ports:
       - "8090:8090"
+    env_file:
+      - ../.env
     environment:
       - OLLAMA_HOST=http://host.docker.internal:11434
       - MCP_TRANSPORT=http
       - DATA_DIR=/data
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/vertexai_sa.json
     volumes:
       - pptx-data:/data
       - ../documentation:/app/documentation:ro
+      - ../credentials:/app/credentials:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -24,7 +30,7 @@ services:
   pptx-ui:
     build:
       context: ..
-      dockerfile: docker/Dockerfile.ui
+      dockerfile: presentations/Dockerfile.ui
     ports:
       - "8091:8091"
     depends_on:

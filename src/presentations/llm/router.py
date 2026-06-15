@@ -2,7 +2,8 @@
 
 from loguru import logger
 
-from presentations.core.profiles import resolve_model_profile
+from presentations.config.settings import get_settings
+from presentations.core.profiles import resolve_effective_supports_vlm, resolve_model_profile
 from presentations.llm.base import LLMProvider
 from presentations.llm.gemini_provider import GeminiProvider
 from presentations.llm.ollama_provider import OllamaProvider
@@ -30,7 +31,9 @@ class LLMRouter:
 
     async def get_vision_provider(self) -> LLMProvider | None:
         """Return a vision-capable provider or None."""
-        if self.profile.supports_vlm and await self.local.is_available():
+        settings = get_settings()
+        vlm_enabled = resolve_effective_supports_vlm(self.profile, settings)
+        if vlm_enabled and await self.local.is_available():
             return self.local
         if self.cloud.is_configured():
             return self.cloud

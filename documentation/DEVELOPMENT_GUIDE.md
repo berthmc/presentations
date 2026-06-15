@@ -34,13 +34,19 @@ Optional: start Ollama and pull models:
 
 ```powershell
 ollama pull qwen2.5:3b
-ollama pull qwen2.5-vl:7b   # optional, for VLM QA on discrete GPU profile
+ollama pull qwen2.5vl:7b   # optional, for VLM QA on discrete GPU profile
 ```
 
 ## Docker
 
 ```powershell
-docker compose -f docker/docker-compose.yml up --build
+docker compose -f presentations/docker-compose.yml up --build
+```
+
+If you still have containers from the old **`docker`** project (before the folder rename), tear them down by project name — the old compose path no longer exists:
+
+```powershell
+docker compose -p docker down -v
 ```
 
 | URL | Service |
@@ -48,13 +54,13 @@ docker compose -f docker/docker-compose.yml up --build
 | http://localhost:8090 | API + MCP at `/mcp` |
 | http://localhost:8091 | React UI (nginx, `/api` proxy) |
 
-Data persists in Docker volume `pptx-data` at `/data`.
+Data persists in Docker volume `presentations_pptx-data` at `/data`.
 
 ### Container commands
 
 ```powershell
-docker compose -f docker/docker-compose.yml logs -f pptx-api
-docker compose -f docker/docker-compose.yml exec pptx-api pptx-mcp --transport stdio
+docker compose -f presentations/docker-compose.yml logs -f pptx-api
+docker compose -f presentations/docker-compose.yml exec pptx-api pptx-mcp --transport stdio
 ```
 
 ## Environment variables
@@ -99,7 +105,7 @@ cd frontend; npm run build
 pptx/
   frontend/              React + Vite UI
   src/presentations/     Python package
-  docker/                Dockerfile, compose, nginx
+  presentations/         Dockerfile, compose, nginx
   documentation/         Project docs (this folder)
   documentation/briefs/  Original specs & Anthropic skill refs
   scripts/office/        PPTX unpack/pack utilities
