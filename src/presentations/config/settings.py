@@ -20,13 +20,13 @@ class Settings(BaseSettings):
     mcp_transport: str = Field(default="http", alias="MCP_TRANSPORT")
 
     ollama_host: str = Field(default="http://localhost:11434", alias="OLLAMA_HOST")
-    ollama_synthesis_model: str = Field(default="qwen2.5:3b", alias="OLLAMA_SYNTHESIS_MODEL")
+    ollama_synthesis_model: str = Field(default="qwen2.5:7b", alias="OLLAMA_SYNTHESIS_MODEL")
     ollama_vlm_model: str = Field(default="qwen2.5vl:7b", alias="OLLAMA_VLM_MODEL")
     ollama_supports_vlm: bool | None = Field(default=None, alias="OLLAMA_SUPPORTS_VLM")
     ollama_num_predict: int = Field(default=4096, alias="OLLAMA_NUM_PREDICT")
-    ollama_num_ctx: int = Field(default=16384, alias="OLLAMA_NUM_CTX")
+    ollama_num_ctx: int = Field(default=32768, alias="OLLAMA_NUM_CTX")
     ollama_temperature: float = Field(default=0.1, alias="OLLAMA_TEMPERATURE")
-    ollama_max_source_context_chars: int = Field(default=4000, alias="OLLAMA_MAX_SOURCE_CONTEXT_CHARS")
+    ollama_max_source_context_chars: int = Field(default=32000, alias="OLLAMA_MAX_SOURCE_CONTEXT_CHARS")
     ollama_read_timeout_generate: float = Field(default=300.0, alias="OLLAMA_READ_TIMEOUT_GENERATE")
     ollama_read_timeout_vlm: float = Field(default=300.0, alias="OLLAMA_READ_TIMEOUT_VLM")
 
@@ -49,6 +49,14 @@ class Settings(BaseSettings):
         default=Path("../pdf/mcp-workspace"),
         alias="PDF_MCP_WORKSPACE_DIR",
     )
+
+    context7_mcp_url: str = Field(default="https://mcp.context7.com/mcp", alias="CONTEXT7_MCP_URL")
+    context7_api_key: str = Field(default="", alias="CONTEXT7_API_KEY")
+    context7_enabled: bool = Field(default=True, alias="CONTEXT7_ENABLED")
+    context7_max_techs: int = Field(default=3, alias="CONTEXT7_MAX_TECHS")
+
+    enable_digest_phase: bool = Field(default=True, alias="ENABLE_DIGEST_PHASE")
+    digest_chunk_chars: int = Field(default=8000, alias="DIGEST_CHUNK_CHARS")
 
     @property
     def staging_dir(self) -> Path:

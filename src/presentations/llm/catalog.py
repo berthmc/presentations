@@ -24,13 +24,22 @@ class CatalogModel:
 
 MODEL_CATALOG: tuple[CatalogModel, ...] = (
     CatalogModel(
+        id="qwen2.5:7b",
+        label="Qwen 2.5 7B (local)",
+        provider="ollama",
+        recommended_for="Technical decks, integrated GPUs, source-grounded content",
+        speed="medium",
+        quality="good",
+        notes="Default on integrated profile. Better synthesis quality with 32k context.",
+    ),
+    CatalogModel(
         id="qwen2.5:3b",
         label="Qwen 2.5 3B (local)",
         provider="ollama",
-        recommended_for="Quick drafts, integrated GPUs, short decks",
+        recommended_for="Quick drafts, low-memory hosts, short decks",
         speed="fast",
         quality="basic",
-        notes="Default on integrated profile. Fast iteration; best for simple topics and fewer slides.",
+        notes="Fast iteration; best for simple topics and fewer slides.",
     ),
     CatalogModel(
         id="deepseek-r1:14b",

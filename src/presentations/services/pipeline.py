@@ -10,6 +10,7 @@ from presentations.core.schemas import GenerateRequest, GenerateResult, Generati
 from presentations.ingest.theme_md3 import load_md3_theme
 from presentations.llm.synthesis import synthesize_deck_spec
 from presentations.qa.loop import run_qa_loop
+from presentations.services.source_enrichment import enrich_source_context
 from presentations.services.template_registry import get_template_registry
 
 
@@ -58,12 +59,14 @@ async def generate_presentation(request: GenerateRequest) -> GenerateResult:
 
     allow_cloud = _resolve_allow_cloud(request)
 
+    source_context = await enrich_source_context(request.brief, request.source_context)
+
     deck_spec = await synthesize_deck_spec(
         brief=request.brief,
         layout=layout_profile,
         mode=mode,
         title=request.title,
-        source_context=request.source_context,
+        source_context=source_context,
         synthesis_model=request.synthesis_model,
         allow_cloud=allow_cloud,
     )

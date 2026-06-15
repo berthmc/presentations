@@ -31,9 +31,9 @@ class ModelProfile:
 
 INTEGRATED_PROFILE = ModelProfile(
     name=HardwareProfileName.INTEGRATED,
-    synthesis_model="qwen2.5:3b",
+    synthesis_model="qwen2.5:7b",
     vlm_model="qwen2.5vl:7b",
-    description="Integrated Radeon 780M — 3B synthesis, optional VLM",
+    description="Integrated Radeon 780M — 7B synthesis, optional VLM",
     supports_vlm=False,
 )
 
