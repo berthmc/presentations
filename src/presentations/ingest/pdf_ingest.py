@@ -2,20 +2,21 @@
 
 from pathlib import Path
 
-import pymupdf4llm
 from loguru import logger
+
+from presentations.services.pdf_mcp_client import convert_pdf_to_markdown
 
 _MAX_BRIEF_CHARS = 100_000
 
 
-def extract_brief_from_pdf(pdf_path: Path) -> str:
+async def extract_brief_from_pdf(pdf_path: Path) -> str:
     """Convert a PDF file to Markdown suitable for use as a content brief.
 
     Args:
         pdf_path: Path to the PDF file on disk.
 
     Returns:
-        Markdown text extracted from the PDF.
+        Markdown text extracted from the PDF via the PDF Toolbox MCP server.
 
     Raises:
         ValueError: If the file is missing, not a PDF, or yields no text.
@@ -26,15 +27,8 @@ def extract_brief_from_pdf(pdf_path: Path) -> str:
     if path.suffix.lower() != ".pdf":
         raise ValueError(f"Expected a .pdf file, got: {path.suffix}")
 
-    logger.info("Extracting brief text from PDF: {}", path.name)
-    try:
-        markdown = pymupdf4llm.to_markdown(str(path))
-    except Exception as exc:
-        raise ValueError(f"Failed to parse PDF: {exc}") from exc
-
-    text = markdown.strip()
-    if not text:
-        raise ValueError("PDF contains no extractable text")
+    logger.info("Extracting brief text from PDF via MCP: {}", path.name)
+    text = await convert_pdf_to_markdown(path)
 
     if len(text) > _MAX_BRIEF_CHARS:
         logger.warning(

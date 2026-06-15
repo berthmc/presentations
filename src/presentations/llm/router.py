@@ -5,6 +5,7 @@ from loguru import logger
 from presentations.config.settings import get_settings
 from presentations.core.profiles import resolve_effective_supports_vlm, resolve_model_profile
 from presentations.llm.base import LLMProvider
+from presentations.llm.catalog import is_gemini_model_id
 from presentations.llm.gemini_provider import GeminiProvider
 from presentations.llm.ollama_provider import OllamaProvider
 
@@ -12,20 +13,37 @@ from presentations.llm.ollama_provider import OllamaProvider
 class LLMRouter:
     """Select synthesis and vision providers based on availability."""
 
-    def __init__(self) -> None:
+    def __init__(self, synthesis_model_override: str | None = None) -> None:
         profile = resolve_model_profile()
         self.profile = profile
+        settings = get_settings()
+        ollama_synthesis = profile.synthesis_model
+        gemini_model = settings.gemini_model
+        self._prefer_gemini = False
+
+        if synthesis_model_override:
+            if is_gemini_model_id(synthesis_model_override):
+                gemini_model = synthesis_model_override
+                self._prefer_gemini = True
+            else:
+                ollama_synthesis = synthesis_model_override
+
         self.local = OllamaProvider(
-            synthesis_model=profile.synthesis_model,
+            synthesis_model=ollama_synthesis,
             vlm_model=profile.vlm_model,
         )
-        self.cloud = GeminiProvider()
+        self.cloud = GeminiProvider(model=gemini_model)
 
     async def get_synthesis_provider(self) -> LLMProvider:
-        """Return local Ollama if available, else Gemini."""
+        """Return the synthesis provider honoring an explicit override when set."""
+        if self._prefer_gemini and self.cloud.is_configured():
+            logger.info("Using Gemini for synthesis ({})", self.cloud.model)
+            return self.cloud
+
         if await self.local.is_available():
             logger.info("Using Ollama for synthesis ({})", self.local.synthesis_model)
             return self.local
+
         logger.warning("Ollama unavailable; falling back to Gemini")
         return self.cloud
 

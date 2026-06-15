@@ -15,9 +15,9 @@ class GeminiProvider(LLMProvider):
 
     name = "gemini"
 
-    def __init__(self) -> None:
+    def __init__(self, model: str | None = None) -> None:
         settings = get_settings()
-        self.model = settings.gemini_model
+        self.model = model or settings.gemini_model
         self.vision_model = settings.gemini_vision_model
         self.project = settings.google_cloud_project
         self.location = settings.google_cloud_location

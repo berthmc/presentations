@@ -5,6 +5,22 @@ export interface Diagnostics {
   total_ram_gb?: number;
 }
 
+export interface ModelOption {
+  id: string;
+  label: string;
+  provider: string;
+  recommended_for: string;
+  speed: string;
+  quality: string;
+  notes: string;
+  available: boolean;
+}
+
+export interface ModelsResponse {
+  default: string;
+  models: ModelOption[];
+}
+
 export interface TemplateSummary {
   id: string;
   name: string;

@@ -55,6 +55,7 @@ async def generate_presentation(request: GenerateRequest) -> GenerateResult:
         layout=layout_profile,
         mode=mode,
         title=request.title,
+        synthesis_model=request.synthesis_model,
     )
 
     output_name = f"{deck_spec.title.replace(' ', '_')}_{uuid4().hex[:8]}.pptx"

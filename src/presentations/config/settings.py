@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     ui_port: int = Field(default=8091, alias="UI_PORT")
     api_base_url: str = Field(default="http://localhost:8090", alias="API_BASE_URL")
 
+    pdf_mcp_url: str = Field(default="http://localhost:3005/mcp", alias="PDF_MCP_URL")
+    pdf_mcp_workspace_dir: Path = Field(
+        default=Path("../pdf/mcp-workspace"),
+        alias="PDF_MCP_WORKSPACE_DIR",
+    )
+
     @property
     def staging_dir(self) -> Path:
         """Directory for intermediate render artefacts."""

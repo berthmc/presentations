@@ -1,4 +1,4 @@
-import type { Diagnostics, GenerateResult, TemplateSummary } from "../types";
+import type { Diagnostics, GenerateResult, ModelsResponse, TemplateSummary } from "../types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
@@ -13,6 +13,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function getDiagnostics(): Promise<Diagnostics> {
   return request("/diagnostics");
+}
+
+export function getModels(): Promise<ModelsResponse> {
+  return request("/models");
 }
 
 export function listTemplates(): Promise<{ templates: TemplateSummary[] }> {
@@ -49,6 +53,7 @@ export function generateDeck(payload: {
   title?: string;
   run_qa: boolean;
   template_id?: string | null;
+  synthesis_model?: string | null;
 }): Promise<GenerateResult> {
   return request("/generate", {
     method: "POST",

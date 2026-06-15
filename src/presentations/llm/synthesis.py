@@ -16,6 +16,7 @@ Rules:
 - Map content to ph_idx placeholder indices exactly as listed.
 - Vary layouts across slides; avoid repeating the same layout for every slide.
 - Keep bullet points concise; use \\n for line breaks within a placeholder.
+- When the brief includes "Target length: N slides", produce approximately N slides.
 - Return JSON matching this schema:
 {
   "title": "string",
@@ -46,6 +47,7 @@ async def synthesize_deck_spec(
     layout: LayoutProfile | None = None,
     mode: GenerationMode = GenerationMode.TEMPLATE,
     title: str | None = None,
+    synthesis_model: str | None = None,
     max_retries: int = 2,
 ) -> DeckSpec:
     """S synthesize a validated DeckSpec from a brief via LLM.
@@ -55,12 +57,13 @@ async def synthesize_deck_spec(
         layout: Discovered layout profile (optional for scratch mode).
         mode: Template or scratch generation.
         title: Optional deck title override.
+        synthesis_model: Optional synthesis model override (Ollama tag or Gemini id).
         max_retries: Number of repair attempts on validation failure.
 
     Returns:
         Validated DeckSpec.
     """
-    router = LLMRouter()
+    router = LLMRouter(synthesis_model_override=synthesis_model)
     provider = await router.get_synthesis_provider()
     user_prompt = _build_user_prompt(brief, layout, mode)
 
