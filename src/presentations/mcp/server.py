@@ -85,6 +85,8 @@ async def generate_deck(
     title: str | None = None,
     run_qa: bool = True,
     synthesis_model: str | None = None,
+    source_context: str | None = None,
+    allow_cloud: bool = False,
 ) -> str:
     """Generate a presentation from a content brief.
 
@@ -96,6 +98,8 @@ async def generate_deck(
         title: Optional deck title.
         run_qa: Whether to run visual QA after generation.
         synthesis_model: Optional synthesis model override (Ollama tag or Gemini id).
+        source_context: Optional PDF-derived text for factual grounding.
+        allow_cloud: When True, Gemini may be used for synthesis fallback and vision QA.
 
     Returns:
         JSON with output_path, deck_spec, qa_report, and layout_profile.
@@ -108,6 +112,8 @@ async def generate_deck(
         title=title,
         run_qa=run_qa,
         synthesis_model=synthesis_model,
+        source_context=source_context,
+        allow_cloud=allow_cloud,
     )
     try:
         result = await generate_presentation(request)

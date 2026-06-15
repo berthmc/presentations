@@ -108,6 +108,8 @@ class GenerateRequest(BaseModel):
     title: str | None = None
     run_qa: bool = True
     synthesis_model: str | None = None
+    source_context: str | None = None
+    allow_cloud: bool = False
 
 
 class GenerateResult(BaseModel):
