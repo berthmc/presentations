@@ -1,6 +1,6 @@
 # Development Guide
 
-How to run, test, and troubleshoot the PPTX Generation Engine locally and in Docker.
+How to run, test, and troubleshoot Presentations@Carmélites locally and in Docker.
 
 ## Prerequisites
 
@@ -75,6 +75,10 @@ Copy from [`.env.example`](../.env.example). Key settings:
 | `HARDWARE_PROFILE` | `auto` | `integrated`, `discrete`, or `auto` |
 | `QA_MAX_ITERATIONS` | `3` | Visual QA retry limit |
 | `GOOGLE_CLOUD_PROJECT` | — | Gemini/Vertex fallback |
+| `PDF_MCP_URL` | `http://localhost:3005/mcp` | PDF Toolbox MCP for brief ingestion |
+| `PDF_MCP_WORKSPACE_DIR` | `../pdf/mcp-workspace` | Shared workspace for staged PDF uploads |
+
+PDF brief ingestion requires the [PDF Toolbox](https://github.com/berthmc/pdf) MCP service on port 3005. In Docker, `presentations/docker-compose.yml` mounts `../pdf/mcp-workspace` and sets `PDF_MCP_URL=http://host.docker.internal:3005/mcp`.
 
 Frontend (Vite): see [`frontend/.env.example`](../frontend/.env.example). Default dev setup uses `/api` proxy — no env file required.
 

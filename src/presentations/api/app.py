@@ -165,7 +165,7 @@ async def ingest_pdf(file: UploadFile = File(...)) -> dict[str, str]:
     try:
         with staging.open("wb") as handle:
             shutil.copyfileobj(file.file, handle)
-        text = extract_brief_from_pdf(staging)
+        text = await extract_brief_from_pdf(staging)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     finally:
