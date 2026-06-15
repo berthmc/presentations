@@ -32,7 +32,7 @@ class ModelProfile:
 INTEGRATED_PROFILE = ModelProfile(
     name=HardwareProfileName.INTEGRATED,
     synthesis_model="qwen2.5:3b",
-    vlm_model="qwen2.5-vl:7b",
+    vlm_model="qwen2.5vl:7b",
     description="Integrated Radeon 780M — 3B synthesis, optional VLM",
     supports_vlm=False,
 )
@@ -40,7 +40,7 @@ INTEGRATED_PROFILE = ModelProfile(
 DISCRETE_PROFILE = ModelProfile(
     name=HardwareProfileName.DISCRETE,
     synthesis_model="deepseek-r1:14b",
-    vlm_model="qwen2.5-vl:7b",
+    vlm_model="qwen2.5vl:7b",
     description="RTX 5070 Ti — 14B synthesis + 7B VLM",
     supports_vlm=True,
 )
@@ -115,6 +115,17 @@ def resolve_model_profile(settings: Settings | None = None) -> ModelProfile:
     return INTEGRATED_PROFILE
 
 
+def resolve_effective_supports_vlm(
+    profile: ModelProfile,
+    settings: Settings | None = None,
+) -> bool:
+    """Return whether VLM is enabled, honouring OLLAMA_SUPPORTS_VLM override."""
+    settings = settings or get_settings()
+    if settings.ollama_supports_vlm is not None:
+        return settings.ollama_supports_vlm
+    return profile.supports_vlm
+
+
 def apply_profile_to_settings(profile: ModelProfile, settings: Settings | None = None) -> Settings:
     """Apply profile defaults to settings when env vars are unchanged."""
     settings = settings or get_settings()
@@ -144,7 +155,8 @@ def run_hardware_diagnostics() -> dict[str, object]:
         except (OSError, subprocess.SubprocessError, ValueError):
             total_ram_gb = None
 
-    profile = resolve_model_profile()
+    settings = get_settings()
+    profile = resolve_model_profile(settings)
     return {
         "platform": platform.system(),
         "total_ram_gb": total_ram_gb,
@@ -153,5 +165,5 @@ def run_hardware_diagnostics() -> dict[str, object]:
         "active_profile": profile.name,
         "synthesis_model": profile.synthesis_model,
         "vlm_model": profile.vlm_model,
-        "supports_vlm": profile.supports_vlm,
+        "supports_vlm": resolve_effective_supports_vlm(profile, settings),
     }
