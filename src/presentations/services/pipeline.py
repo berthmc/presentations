@@ -5,11 +5,35 @@ from uuid import uuid4
 from loguru import logger
 
 from presentations.compile.pipeline import compile_deck
-from presentations.core.schemas import GenerateRequest, GenerateResult, GenerationMode
-from presentations.ingest.discover import discover_layout
+from presentations.config.settings import get_settings
+from presentations.core.schemas import GenerateRequest, GenerateResult, GenerationMode, LayoutProfile, QAReport
 from presentations.ingest.theme_md3 import load_md3_theme
 from presentations.llm.synthesis import synthesize_deck_spec
 from presentations.qa.loop import run_qa_loop
+from presentations.services.template_registry import get_template_registry
+
+
+def _resolve_generation_context(request: GenerateRequest) -> tuple[str | None, LayoutProfile | None, GenerationMode]:
+    """Resolve template path, cached layout profile, and effective generation mode."""
+    registry = get_template_registry()
+    resolved = registry.resolve(template_id=request.template_id, template_path=request.template_path)
+
+    if resolved is None:
+        return None, None, request.mode
+
+    mode = request.mode
+    if request.template_id and mode == GenerationMode.SCRATCH and resolved.source_type == "pptx":
+        mode = GenerationMode.TEMPLATE
+    elif request.template_id and mode == GenerationMode.SCRATCH and resolved.source_type == "md":
+        pass  # md template can guide scratch layouts
+
+    if mode == GenerationMode.TEMPLATE and resolved.source_type != "pptx":
+        raise ValueError("Template mode requires a .pptx library template")
+
+    if mode == GenerationMode.TEMPLATE and not resolved.template_path:
+        raise ValueError("template_id or template_path required for template mode")
+
+    return resolved.template_path, resolved.layout_profile, mode
 
 
 async def generate_presentation(request: GenerateRequest) -> GenerateResult:
@@ -21,35 +45,26 @@ async def generate_presentation(request: GenerateRequest) -> GenerateResult:
     Returns:
         GenerateResult with output path and QA report.
     """
-    layout_profile = None
-    template_path = request.template_path
+    template_path, layout_profile, mode = _resolve_generation_context(request)
 
-    if request.mode == GenerationMode.TEMPLATE:
-        if not template_path:
-            raise ValueError("template_path required for template mode")
-        layout_profile = discover_layout(template_path)
-    elif template_path and template_path.endswith(".md"):
-        layout_profile = discover_layout(template_path)
-    else:
-        layout_profile = None
+    if mode == GenerationMode.TEMPLATE and not template_path:
+        raise ValueError("template_id or template_path required for template mode")
 
     deck_spec = await synthesize_deck_spec(
         brief=request.brief,
         layout=layout_profile,
-        mode=request.mode,
+        mode=mode,
         title=request.title,
     )
 
     output_name = f"{deck_spec.title.replace(' ', '_')}_{uuid4().hex[:8]}.pptx"
-    from presentations.config.settings import get_settings
-
     settings = get_settings()
     output_path = settings.output_dir / output_name
 
     await compile_deck(
         deck_spec=deck_spec,
         output_path=output_path,
-        template_path=template_path if request.mode == GenerationMode.TEMPLATE else None,
+        template_path=template_path if mode == GenerationMode.TEMPLATE else None,
         layout_profile=layout_profile,
     )
 
@@ -59,13 +74,9 @@ async def generate_presentation(request: GenerateRequest) -> GenerateResult:
             qa_report = await run_qa_loop(output_path, deck_spec=deck_spec)
         except FileNotFoundError as exc:
             logger.warning("QA rendering skipped: {}", exc)
-            from presentations.core.schemas import QAReport
-
             qa_report = QAReport(passed=True, reasons=[f"QA skipped: {exc}"])
 
-    if layout_profile is None and request.mode == GenerationMode.SCRATCH:
-        from presentations.core.schemas import LayoutProfile
-
+    if layout_profile is None and mode == GenerationMode.SCRATCH:
         layout_profile = LayoutProfile(
             source_path="scratch",
             source_type="md3",

@@ -19,13 +19,49 @@ async def _fetch_diagnostics() -> dict:
         return response.json()
 
 
-async def _generate_deck(brief: str, mode: str, title: str, run_qa: bool, template_path: str | None) -> dict:
+async def _fetch_templates() -> list[dict]:
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(f"{_api_base()}/templates")
+        response.raise_for_status()
+        return response.json().get("templates", [])
+
+
+async def _register_template(name: str, file_content: bytes, filename: str, is_default: bool) -> dict:
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        response = await client.post(
+            f"{_api_base()}/templates",
+            data={"name": name, "is_default": str(is_default).lower()},
+            files={"file": (filename, file_content)},
+        )
+        response.raise_for_status()
+        return response.json()
+
+
+async def _delete_template(template_id: str) -> None:
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.delete(f"{_api_base()}/templates/{template_id}")
+        response.raise_for_status()
+
+
+async def _set_default_template(template_id: str) -> None:
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.patch(f"{_api_base()}/templates/{template_id}/default")
+        response.raise_for_status()
+
+
+async def _generate_deck(
+    brief: str,
+    mode: str,
+    title: str,
+    run_qa: bool,
+    template_id: str | None,
+) -> dict:
     payload = {
         "brief": brief,
         "mode": mode,
         "title": title or None,
         "run_qa": run_qa,
-        "template_path": template_path or None,
+        "template_id": template_id,
     }
     async with httpx.AsyncClient(timeout=300.0) as client:
         response = await client.post(f"{_api_base()}/generate", json=payload)
@@ -36,7 +72,7 @@ async def _generate_deck(brief: str, mode: str, title: str, run_qa: bool, templa
 def build_ui() -> None:
     """Build the NiceGUI page layout."""
     apply_md3_theme()
-    state = {"result": None, "diagnostics": {}}
+    state = {"result": None, "diagnostics": {}, "templates": []}
 
     with ui.column().classes("w-full max-w-5xl mx-auto p-6 gap-4"):
         ui.label("PPTX Generation Engine").classes("text-3xl md3-title")
@@ -62,12 +98,83 @@ def build_ui() -> None:
             ui.timer(0.1, load_diag, once=True)
 
         with ui.card().classes("md3-card w-full p-4 gap-3"):
+            ui.label("Template Library").classes("text-lg font-bold")
+            library_status = ui.label("").classes("text-sm text-gray-600")
+            template_select = ui.select({}, label="Saved template", with_input=True).classes("w-full")
+            upload_name = ui.input("Template name", placeholder="e.g. Acme Corporate 2026").classes("w-full")
+            upload_default = ui.checkbox("Set as default", value=False)
+
+            async def refresh_templates() -> None:
+                try:
+                    state["templates"] = await _fetch_templates()
+                    options = {
+                        t["id"]: (
+                            f"{t['name']} ({t['source_type']})"
+                            f"{' *' if t.get('is_default') else ''}"
+                        )
+                        for t in state["templates"]
+                    }
+                    template_select.set_options(options, value=_default_template_id(state["templates"]))
+                    library_status.text = f"{len(state['templates'])} template(s) in library"
+                except httpx.HTTPError as exc:
+                    library_status.text = f"Could not load templates: {exc}"
+
+            def _default_template_id(templates: list[dict]) -> str | None:
+                for item in templates:
+                    if item.get("is_default"):
+                        return item["id"]
+                return templates[0]["id"] if templates else None
+
+            async def on_upload(e) -> None:
+                if not upload_name.value:
+                    library_status.text = "Enter a template name before uploading."
+                    return
+                try:
+                    content = e.content.read()
+                    await _register_template(
+                        upload_name.value,
+                        content,
+                        e.name,
+                        upload_default.value,
+                    )
+                    library_status.text = f"Registered template '{upload_name.value}'"
+                    upload_name.value = ""
+                    await refresh_templates()
+                except httpx.HTTPError as exc:
+                    library_status.text = f"Upload failed: {exc}"
+
+            ui.upload(on_upload=on_upload, auto_upload=True, label="Upload .pptx or .md template").classes("w-full")
+
+            with ui.row().classes("gap-2"):
+                async def on_set_default() -> None:
+                    if not template_select.value:
+                        return
+                    try:
+                        await _set_default_template(template_select.value)
+                        library_status.text = "Default template updated."
+                        await refresh_templates()
+                    except httpx.HTTPError as exc:
+                        library_status.text = f"Failed: {exc}"
+
+                async def on_delete_template() -> None:
+                    if not template_select.value:
+                        return
+                    try:
+                        await _delete_template(template_select.value)
+                        library_status.text = "Template deleted."
+                        await refresh_templates()
+                    except httpx.HTTPError as exc:
+                        library_status.text = f"Delete failed: {exc}"
+
+                ui.button("Set default", on_click=on_set_default).props("outline")
+                ui.button("Delete", on_click=on_delete_template).props("outline color=negative")
+
+            ui.timer(0.2, refresh_templates, once=True)
+
+        with ui.card().classes("md3-card w-full p-4 gap-3"):
             ui.label("Generate Presentation").classes("text-lg font-bold")
             title_input = ui.input("Title").classes("w-full")
             mode_select = ui.select(["scratch", "template"], value="scratch", label="Mode").classes("w-full")
-            template_input = ui.input("Template path (.pptx or .md)", placeholder="Optional for scratch mode").classes(
-                "w-full"
-            )
             brief_input = ui.textarea("Content brief", placeholder="Describe the presentation you want…").classes(
                 "w-full"
             ).props("rows=8")
@@ -75,6 +182,15 @@ def build_ui() -> None:
             status = ui.label("").classes("text-sm text-gray-600")
             qa_report = ui.markdown("")
             download_link = ui.link("Download", "#").classes("hidden")
+
+            def _sync_mode_from_template() -> None:
+                if not template_select.value:
+                    return
+                selected = next((t for t in state["templates"] if t["id"] == template_select.value), None)
+                if selected and selected.get("source_type") == "pptx":
+                    mode_select.value = "template"
+
+            template_select.on("update:model-value", lambda _: _sync_mode_from_template())
 
             async def on_generate() -> None:
                 status.text = "Generating…"
@@ -86,7 +202,7 @@ def build_ui() -> None:
                         mode=mode_select.value,
                         title=title_input.value,
                         run_qa=run_qa.value,
-                        template_path=template_input.value or None,
+                        template_id=template_select.value or None,
                     )
                     state["result"] = result
                     output = result.get("output_path", "")

@@ -102,8 +102,9 @@ class GenerateRequest(BaseModel):
     """API/MCP request to generate a presentation."""
 
     brief: str
+    template_id: str | None = None
     template_path: str | None = None
-    mode: GenerationMode = GenerationMode.TEMPLATE
+    mode: GenerationMode = GenerationMode.SCRATCH
     title: str | None = None
     run_qa: bool = True
 

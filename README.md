@@ -63,10 +63,36 @@ Self-hosted first-party MCP server — not a third-party/shadow MCP.
 
 | Tool | Description |
 |------|-------------|
+| `list_templates` | List persisted templates (id, name, source_type, is_default) |
+| `register_template` | Add a .pptx/.md file to the template library |
 | `discover_layout_tool` | Parse `.pptx` or `.md` template layouts |
-| `generate_deck` | Full pipeline: synthesize → compile → optional QA |
+| `generate_deck` | Full pipeline; pass `template_id` (preferred) or `template_path` |
 | `render_qa` | Render existing deck and run visual QA |
 | `hardware_diagnostics` | Host RAM/GPU profile and model selection |
+
+## Template library
+
+Templates are persisted under `DATA_DIR/templates/` with a `registry.json` index. Upload once via the UI or `POST /templates`; select by `template_id` on later runs.
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /templates` | List saved templates |
+| `POST /templates` | Upload and register (multipart: `name`, `file`, optional `is_default`) |
+| `GET /templates/{id}` | Full template metadata + cached layout profile |
+| `PATCH /templates/{id}/default` | Set default template |
+| `DELETE /templates/{id}` | Remove from library |
+
+Generate with a saved template:
+
+```json
+POST /generate
+{
+  "brief": "...",
+  "template_id": "abc123...",
+  "mode": "template",
+  "run_qa": false
+}
+```
 
 ## Architecture
 
