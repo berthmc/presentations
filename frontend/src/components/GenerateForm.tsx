@@ -8,6 +8,12 @@ function isGeminiModelId(modelId: string): boolean {
   return modelId.startsWith("gemini");
 }
 
+type SourceDoc = { filename: string; text: string };
+
+function mergeSourceDocuments(docs: SourceDoc[]): string {
+  return docs.map((doc) => `--- Document: ${doc.filename} ---\n${doc.text}`).join("\n\n");
+}
+
 interface Props {
   templateId: string;
   mode: "scratch" | "template";
@@ -23,17 +29,18 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
   const [tone, setTone] = useState("");
   const [slideCount, setSlideCount] = useState("");
   const [keyPoints, setKeyPoints] = useState("");
-  const [sourceContext, setSourceContext] = useState("");
-  const [sourceFileName, setSourceFileName] = useState("");
-  const [showSourcePreview, setShowSourcePreview] = useState(false);
+  const [sourceDocs, setSourceDocs] = useState<SourceDoc[]>([]);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [synthesisModel, setSynthesisModel] = useState("auto");
   const [allowCloud, setAllowCloud] = useState(false);
   const [runQa, setRunQa] = useState(false);
   const [status, setStatus] = useState("");
   const [result, setResult] = useState<GenerateResult | null>(null);
   const [busy, setBusy] = useState(false);
-  const [ingesting, setIngesting] = useState(false);
+  const [ingestingCount, setIngestingCount] = useState(0);
   const pdfInputRef = useRef<HTMLInputElement>(null);
+
+  const ingesting = ingestingCount > 0;
 
   function loadExampleBrief() {
     setTopic(EXAMPLE_BRIEF.topic);
@@ -45,11 +52,31 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
     setStatus("Loaded example brief.");
   }
 
-  function clearSourceDocument() {
-    setSourceContext("");
-    setSourceFileName("");
-    setShowSourcePreview(false);
+  function clearSourceDocuments() {
+    setSourceDocs([]);
+    setPreviewIndex(null);
+    setStatus("Source documents removed.");
+  }
+
+  function removeSourceDocument(index: number) {
+    setSourceDocs((prev) => prev.filter((_, docIndex) => docIndex !== index));
+    setPreviewIndex((prev) => {
+      if (prev === null) {
+        return null;
+      }
+      if (prev === index) {
+        return null;
+      }
+      if (prev > index) {
+        return prev - 1;
+      }
+      return prev;
+    });
     setStatus("Source document removed.");
+  }
+
+  function toggleSourcePreview(index: number) {
+    setPreviewIndex((prev) => (prev === index ? null : index));
   }
 
   function handleSynthesisModelChange(modelId: string) {
@@ -62,23 +89,33 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
   const geminiModelSelected = synthesisModel !== "auto" && isGeminiModelId(synthesisModel);
 
   async function handlePdfUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const files = event.target.files;
     event.target.value = "";
-    if (!file) {
+    if (!files || files.length === 0) {
       return;
     }
-    setIngesting(true);
-    setStatus("Extracting PDF…");
+
+    const fileList = Array.from(files);
+    setIngestingCount((count) => count + fileList.length);
+    setStatus(`Extracting ${fileList.length} PDF${fileList.length > 1 ? "s" : ""}…`);
+
     try {
-      const { source_context, filename } = await ingestPdf(file);
-      setSourceContext(source_context);
-      setSourceFileName(filename ?? file.name);
-      setShowSourcePreview(false);
-      setStatus(`Attached source document: ${filename ?? file.name}`);
+      const results = await Promise.all(
+        fileList.map(async (file) => {
+          try {
+            const { source_context, filename } = await ingestPdf(file);
+            return { filename: filename ?? file.name, text: source_context };
+          } finally {
+            setIngestingCount((count) => count - 1);
+          }
+        }),
+      );
+      setSourceDocs((prev) => [...prev, ...results]);
+      setPreviewIndex(null);
+      const names = results.map((doc) => doc.filename).join(", ");
+      setStatus(`Attached source document${results.length > 1 ? "s" : ""}: ${names}`);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "PDF extraction failed");
-    } finally {
-      setIngesting(false);
     }
   }
 
@@ -95,6 +132,7 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
       slideCount,
       keyPoints,
     });
+    const sourceContext = sourceDocs.length ? mergeSourceDocuments(sourceDocs) : undefined;
     setBusy(true);
     setStatus("Generating…");
     setResult(null);
@@ -107,7 +145,7 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
         run_qa: runQa,
         template_id: templateId || null,
         synthesis_model: synthesisModel === "auto" ? undefined : synthesisModel,
-        source_context: sourceContext || undefined,
+        source_context: sourceContext,
         allow_cloud: allowCloud,
       });
       setResult(payload);
@@ -126,7 +164,7 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
       <p className="brief-guidance">
         Describe your presentation using the fields below. Provide at least a topic; audience, goal, tone, target
         length, and key points help the model structure slides appropriately. This is a content brief, not a
-        per-slide design script. Optionally attach a PDF as a source document for factual grounding.
+        per-slide design script. Optionally attach PDFs as source documents for factual grounding.
       </p>
       <button type="button" className="text-link" onClick={loadExampleBrief}>
         Load example brief
@@ -144,24 +182,15 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
       </div>
       <ModelSelector value={synthesisModel} onChange={handleSynthesisModelChange} allowCloud={allowCloud} />
       <div className="field">
-        <label htmlFor="topic">Topic / details</label>
-        <textarea
-          id="topic"
-          className="textarea-md"
-          value={topic}
-          onChange={(event) => setTopic(event.target.value)}
-          placeholder="Main subject and any context the model should know…"
-        />
-      </div>
-      <div className="field">
-        <label>Source document (optional)</label>
+        <label>Source documents (optional)</label>
         <p className="field-hint">
-          Upload a PDF to ground slide content in source facts. The extracted text is not used as the brief.
+          Upload one or more PDFs to ground slide content in source facts. The extracted text is not used as the brief.
         </p>
         <input
           ref={pdfInputRef}
           type="file"
           accept=".pdf,application/pdf"
+          multiple
           hidden
           onChange={handlePdfUpload}
         />
@@ -172,22 +201,34 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
             onClick={() => pdfInputRef.current?.click()}
             disabled={busy || ingesting}
           >
-            {ingesting ? "Extracting PDF…" : "Upload PDF"}
+            {ingesting ? `Extracting PDF${ingestingCount > 1 ? "s" : ""}…` : "Upload PDFs"}
           </button>
-          {sourceContext && (
-            <span className="source-chip">
-              {sourceFileName} · {sourceContext.length.toLocaleString()} chars
-              <button type="button" className="text-link" onClick={() => setShowSourcePreview((v) => !v)}>
-                {showSourcePreview ? "Hide preview" : "Preview"}
-              </button>
-              <button type="button" className="text-link" onClick={clearSourceDocument}>
-                Remove
-              </button>
-            </span>
+          {sourceDocs.length > 0 && (
+            <button type="button" className="text-link" onClick={clearSourceDocuments} disabled={busy || ingesting}>
+              Remove all
+            </button>
           )}
         </div>
-        {showSourcePreview && sourceContext && (
-          <pre className="source-preview">{sourceContext.slice(0, 500)}{sourceContext.length > 500 ? "…" : ""}</pre>
+        {sourceDocs.length > 0 && (
+          <div className="source-doc-row">
+            {sourceDocs.map((doc, index) => (
+              <span key={`${doc.filename}-${index}`} className="source-chip">
+                {doc.filename} · {doc.text.length.toLocaleString()} chars
+                <button type="button" className="text-link" onClick={() => toggleSourcePreview(index)}>
+                  {previewIndex === index ? "Hide preview" : "Preview"}
+                </button>
+                <button type="button" className="text-link" onClick={() => removeSourceDocument(index)}>
+                  Remove
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        {previewIndex !== null && sourceDocs[previewIndex] && (
+          <pre className="source-preview">
+            {sourceDocs[previewIndex].text.slice(0, 500)}
+            {sourceDocs[previewIndex].text.length > 500 ? "…" : ""}
+          </pre>
         )}
       </div>
       <div className="field-grid">
@@ -254,7 +295,7 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
           onChange={(event) => setAllowCloud(event.target.checked)}
         />
         <label htmlFor="allow-cloud">
-          Allow Gemini (cloud AI) — your brief and source document will be sent to Google Vertex AI
+          Allow Gemini (cloud AI) — your brief and source documents will be sent to Google Vertex AI
         </label>
       </div>
       {geminiModelSelected && (
