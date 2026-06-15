@@ -1,0 +1,23 @@
+---
+description: Vertex AI (Gemini) integration conventions.
+alwaysApply: false
+globs:
+  - "**/ai/**/*.py"
+  - "**/agents/**/*.py"
+---
+
+# Vertex AI & Gemini
+
+## Authentication & API
+- **Vertex AI / ADC is the default** in production (Cloud Run) and local dev.
+- Use Application Default Credentials (ADC) or a service account JSON file locally.
+- Initialize client via `genai.Client(vertexai=True, project=..., location=...)` using `build_genai_client()` in `utils/genai_client.py`.
+- **`GEMINI_API_KEY`** is a documented dev/legacy fallback only — do not introduce new code paths that depend on it.
+
+## Model Selection
+- **`gemini-2.0-flash`**: Use for standard content generation, drafts, and high-volume tasks.
+- **`gemini-2.5-pro`**: Reserve for complex reasoning, quality scoring, and deep analysis.
+
+## Practices
+- Use structured JSON outputs via Pydantic schemas where necessary.
+- Utilize the `json-repair` package for malformed LLM responses before throwing hard validation errors.

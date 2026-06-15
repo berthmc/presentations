@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Environment & secrets
+.env
+secrets/
+*.json.key
+
+# Runtime data
+data/
+logs/
+*.log
+output/
+staging/
+
+# Node
+node_modules/
+compile/node/node_modules/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Generated presentations
+*.pptx
+!templates/**/*.pptx
+
+# Debug outputs
+debug_scripts/*.txt

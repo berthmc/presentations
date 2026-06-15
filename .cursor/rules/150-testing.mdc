@@ -1,0 +1,25 @@
+---
+description: pytest conventions, mock env vars, and Docker-first test execution.
+alwaysApply: false
+globs:
+  - "tests/**"
+---
+
+# Testing (CMS)
+
+## Commands
+- Lint: `ruff check src/ tests/`
+- Tests: `PYTHONPATH=src python -m pytest tests/ -v --tb=short` (from repo root, using `.venv`)
+- Prefer Docker for integration runs; do not suggest bare `python` on host for production-like checks.
+
+## Configuration
+- `asyncio_mode = auto` and `pythonpath = ["src"]` in `pyproject.toml`.
+- See `documentation/TESTING_NOTES.md` for fixture and mocking details.
+
+## Mocking
+- Tests mock Firestore and Gemini — no external services required.
+- With `TA_API_ENABLED=false` in `.env`, two tests fail (`test_ta_api_service`, sector spotlight in `test_market_article_gen_service`). Run full suite with `TA_API_ENABLED=true` or accept those failures locally.
+
+## Agent behaviour
+- Add tests alongside changed services; use `pytest-asyncio` for async code.
+- Do not skip security MCP `check_code_quality` on changed `*.py` before committing.

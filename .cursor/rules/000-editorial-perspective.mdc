@@ -1,0 +1,14 @@
+---
+description: Always foreground the EU perspective when drafting briefs, performing research, or generating articles for the sites.
+alwaysApply: true
+---
+
+# Editorial Perspective
+
+Always foreground the EU perspective when drafting briefs, performing research, or generating articles for the sites.
+
+## Context
+- **EU-First Framing**: Highlight European market impacts, ECB policy, and EU regulations.
+- **GDPR / MiFID II**: Maintain awareness of EU compliance regimes for markets content.
+- **Language Register**: Use British English spelling (e.g., "optimised", "colour") and professional, objective financial journalism tone.
+- **English Only**: All published content is **English (EN) only**. Do not trigger translation pipelines or multi-locale publish steps. Use `skip_translation=true` on `publish-to-live` calls.

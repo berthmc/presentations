@@ -1,0 +1,19 @@
+---
+description: Application configuration patterns — env-loaded Settings, not pydantic-settings.
+alwaysApply: false
+globs:
+  - "**/config/**/*.py"
+---
+
+# Config & Settings (CMS)
+
+## Pattern
+- Application config uses a plain `Settings` class in `config/settings.py` loaded via `python-dotenv` from repo-root `.env`.
+- **Do not** migrate config to `pydantic-settings` or `BaseSettings` unless explicitly requested.
+
+## Credentials
+- Google credentials resolved via `_resolve_google_credentials()` waterfall (`secrets/*.json`, `vertexai_sa.json`).
+- See `130-secrets-safety.mdc` for commit-safety rules.
+
+## Pydantic usage
+- Pydantic v2 is for **API schemas** in `schemas/` only — not for runtime settings.

@@ -1,0 +1,54 @@
+[project]
+name = "pptx-engine"
+version = "0.1.0"
+description = "Local-first LLM-powered PowerPoint generation with MD3 styling and visual QA"
+authors = [{ name = "Marc", email = "marc.berthiaume@gmail.com" }]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "fastmcp>=2.0.0",
+    "python-pptx>=1.0.2",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "ollama>=0.4.0",
+    "google-genai>=1.0.0",
+    "loguru>=0.7.0",
+    "nicegui>=2.0.0",
+    "httpx>=0.28.0",
+    "python-multipart>=0.0.18",
+    "markitdown[pptx]>=0.1.0",
+    "Pillow>=11.0.0",
+    "defusedxml>=0.7.1",
+    "pyyaml>=6.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+]
+
+[project.scripts]
+pptx-mcp = "presentations.mcp.server:main"
+pptx-api = "presentations.api.app:main"
+pptx-ui = "presentations.frontend.app:main"
+
+[tool.poetry]
+packages = [{ include = "presentations", from = "src" }]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

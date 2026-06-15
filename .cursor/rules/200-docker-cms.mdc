@@ -1,0 +1,20 @@
+---
+description: Docker infrastructure and local dev commands for CMS.
+alwaysApply: false
+---
+
+# Docker (CMS)
+
+## Running Services
+- Command: `sudo docker compose up -d mcp_docs backend frontend`
+- Services start in dependency order: `mcp_docs` -> `backend` -> `frontend`.
+- Health checks:
+  - Backend: `http://localhost:8001/health`
+  - Frontend: `http://localhost:8086`
+
+## Dependencies
+- Never suggest running `python` or `pytest` directly on the host. Use the `.venv` or run inside Docker.
+
+## Gotchas
+- **Sudo**: Docker daemon requires `sudo` on Cloud Agent VMs.
+- **Docker-in-Docker**: Requires `fuse-overlayfs` and `iptables-legacy`.

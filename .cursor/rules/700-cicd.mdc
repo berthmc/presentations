@@ -1,0 +1,17 @@
+---
+description: CI/CD deployment pipelines via GitHub Actions and Workload Identity.
+alwaysApply: false
+---
+
+# CI/CD (CMS)
+
+## Workload Identity Federation (WIF)
+- **No JSON keys in CI**: Authenticate deployments to GCP using GitHub Actions WIF (`WIF_PROVIDER`, `WIF_SERVICE_ACCOUNT`).
+
+## Triggers & Workflows
+- **Deploy**: `deploy.yml` triggered on push to `main` to build and roll out Cloud Run updates.
+- **Drain**: `drain-pending-publish.yml` triggered by cron or manual dispatch.
+
+## Container Builds
+- Use `cloudbuild.yaml` to orchestrate multi-stage builds.
+- Tag images with the commit SHA and `latest`.

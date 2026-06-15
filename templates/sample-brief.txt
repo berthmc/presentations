@@ -1,0 +1,8 @@
+Create a 4-slide technical presentation about local-first LLM pipelines for enterprise document automation.
+
+Slide 1: Title — "Local-First PPTX Engine" with subtitle "Template fidelity · MD3 styling · Visual QA"
+Slide 2: Problem — cloud API costs, formatting loops, data exposure
+Slide 3: Architecture — Layout Discovery, Semantic Synthesis, Compile, Visual QA
+Slide 4: Outcomes — faster deck production, brand compliance, closed-loop QA
+
+Use concise bullet points. European professional tone.

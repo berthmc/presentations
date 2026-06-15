@@ -1,0 +1,34 @@
+---
+description: CMS codebase layout and key entrypoints for agent navigation.
+alwaysApply: true
+---
+
+# Architecture Map (CMS)
+
+## Entrypoints
+- `src/cms/backend_main.py` — FastAPI backend (port 8001 in Docker)
+- `src/cms/frontend_main.py` — NiceGUI admin (port 8086)
+- `src/cms/mcp_main.py` — Docs MCP server (port 3003)
+
+## Backend layout (`src/cms/backend/`)
+- `routers/` — FastAPI route modules mounted under `/api/v1`
+- `services/` — Business logic (~79 modules); delegate here from routers
+- `schemas/` — Pydantic v2 API models (not `models/`)
+- `config/settings.py` — Env-loaded `Settings` (plain class)
+- `agents/` — Google ADK agents (optional `[agents]` extra)
+- `ai/prompts/` — Jinja2 LLM prompt templates
+- `services/publishing/` — Article publish pipeline (render, GCS sync, hreflang)
+- `content/` — Static i18n copy for legal/contact pages
+
+## Key services
+- `article_service.py` / `domain_article_service.py` — Firestore articles at `domains/{domainId}/articles/{slug}`
+- `translation_service.py` — Legacy; **do not invoke** (EN-only publishing policy)
+- `gcs_*_sync_service.py` — GCS upload, sitemaps, stubs, CDN invalidation
+- `mcp_client_service.py` — External MCP client calls
+
+## Frontend
+- `src/cms/frontend/` — NiceGUI admin pages and shared layout components
+
+## Tests & docs
+- `tests/` — pytest with Firestore/Gemini mocks (see `documentation/TESTING_NOTES.md`)
+- `AGENTS.md` — Canonical run/lint/test commands; prefer linking here over duplicating ports/versions in rules

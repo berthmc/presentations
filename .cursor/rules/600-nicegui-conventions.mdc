@@ -1,0 +1,19 @@
+---
+description: NiceGUI admin frontend conventions.
+alwaysApply: false
+globs:
+  - "**/frontend/**"
+---
+
+# NiceGUI Conventions (CMS)
+
+## Structure
+- Build admin pages using NiceGUI 3.x.
+- **Entry points only**: Only use `ui.run()` in the main entry point (e.g., `frontend_main.py`), not inside individual page definitions.
+
+## Styling & Layout
+- Prefer standard CSS classes (Tailwind if configured via NiceGUI) and the established brand palette.
+- Extract common page shells into shared layout components (e.g., a shared navigation/header function that wraps page content).
+
+## State Management
+- Use NiceGUI's reactive state capabilities (e.g., `ui.refreshable` or bindings) where possible to avoid manual DOM updates.

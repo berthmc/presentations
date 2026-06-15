@@ -1,0 +1,21 @@
+---
+description: Python 3.13 coding standards, typing, and async patterns.
+alwaysApply: true
+---
+
+# Python Standards
+
+## Version & Tooling
+- **Python 3.13 only** (`requires-python >=3.13,<3.14` in `pyproject.toml`).
+- Enforce PEP 8 using **Ruff** (`select = ["E", "F", "I", "W"]`, `line-length = 120`).
+
+## Async/Await Correctness
+- **No blocking calls** in async functions (e.g., use `await asyncio.sleep()` instead of `time.sleep()`).
+- Use `asyncio.gather()` for independent parallel awaits.
+- Do not forget to `await` coroutines.
+
+## Patterns & Practices
+- **No bare `except`**: Catch specific exceptions.
+- **Pathlib**: Prefer `pathlib.Path` over `os.path`.
+- **Typing**: Use comprehensive type hints for all function signatures.
+- **Docstrings**: Use Google-style docstrings for all public classes and functions.

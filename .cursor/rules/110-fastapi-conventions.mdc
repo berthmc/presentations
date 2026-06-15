@@ -1,0 +1,23 @@
+---
+description: FastAPI routing, dependency injection, and endpoint conventions.
+alwaysApply: false
+globs:
+  - "**/routers/**/*.py"
+  - "**/backend_main.py"
+---
+
+# FastAPI Conventions
+
+## Routers & Endpoints
+- Use `APIRouter` with explicit `prefix` and `tags`.
+- Keep route handlers thin; delegate business logic to the `services/` layer.
+
+## Dependencies & Errors
+- Use `Depends()` for dependency injection (e.g., database sessions, clients).
+- Raise `HTTPException` with clear status codes and detail messages for API errors.
+
+## Background Tasks
+- Differentiate between long-running workflows (which should use Cloud Run / background task patterns or Celery) and quick in-request `BackgroundTasks`.
+
+## Response Models
+- Explicitly define `response_model` using Pydantic models for all endpoints to ensure schema generation and data validation.

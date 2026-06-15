@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "pptx": {
+      "command": "pptx-mcp",
+      "args": ["--transport", "stdio"],
+      "env": {
+        "OLLAMA_HOST": "http://localhost:11434",
+        "DATA_DIR": "./data"
+      }
+    },
+    "eodhd": {
+      "url": "https://mcp.eodhd.dev/mcp?apikey=EODHD_API_KEY"
+    },
+    "financial": {
+      "url": "http://localhost:3000/sse"
+    },
+    "user-security-auditor": {
+      "url": "http://localhost:3001/sse"
+    },
+    "cms-docs": {
+      "command": "python",
+      "args": [
+        "scripts/cms_docs_mcp_server.py"
+      ],
+      "cwd": "."
+    }
+  }
+}

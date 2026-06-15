@@ -1,0 +1,24 @@
+---
+description: Pydantic v2 data modeling and validation patterns.
+alwaysApply: false
+globs:
+  - "**/schemas/**/*.py"
+---
+
+# Pydantic v2 Conventions
+
+## Validation
+- Use `@model_validator(mode='before'|'after')` and `@field_validator` instead of v1 equivalents.
+- Keep validation logic within the model where possible.
+
+## Serialization
+- Use `model_dump()` and `model_dump_json()` over the deprecated `.dict()` and `.json()`.
+- Use `ConfigDict` for configuration instead of inner `class Config`.
+
+## Typing
+- Leverage discriminated unions for polymorphic inputs.
+- Use explicit Optional/Union types appropriately.
+
+## Config vs API Models
+- API request/response models live in `schemas/` — not `models/`.
+- Application config uses env-loaded `Settings` in `config/settings.py` (plain class, not `pydantic-settings`). See `130-config-settings.mdc`.

@@ -1,0 +1,17 @@
+---
+description: Logging conventions — loguru with percent-format patch and file sink.
+alwaysApply: true
+---
+
+# Logging (CMS)
+
+## Library
+- Use **loguru** (`from loguru import logger`) — not stdlib `logging`.
+
+## Setup
+- Call `patch_loguru_percent_format()` from `config/logging_config.py` at startup for `%s`-style compatibility.
+- File sink: `logger.add("logs/cms.log", ...)` in `backend_main.py`.
+
+## Practices
+- Use structured, concise log messages at service boundaries and error paths.
+- Do not log secrets, tokens, or full credential paths.

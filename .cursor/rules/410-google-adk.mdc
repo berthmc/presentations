@@ -1,0 +1,28 @@
+---
+description: Google ADK framework patterns for CMS agents.
+alwaysApply: false
+globs:
+  - "**/agents/**/*.py"
+---
+
+# Google ADK Patterns
+
+## Dependency
+- `google-adk` is an **optional** extra: `pip install -e ".[agents]"` (`[project.optional-dependencies] agents` in `pyproject.toml`). Base install does not include it.
+
+## Structure
+- Build agents using the `google-adk` framework.
+- Core components belong in `src/cms/backend/agents/`:
+  - `_agents_ops.py`: Core agent reasoning logic.
+  - `_session_ops.py`: Session management and context boundaries.
+  - `_tools_catalog.py`: ADK tool definitions.
+  - `_memory_ops.py`: Persistent agent memory retrieval and updates.
+  - `_telemetry.py`: ADK telemetry and tracing.
+  - `_adk_imports.py`: Shared ADK imports and guards.
+  - `_deployment_ops.py`: Vertex Agent Engine deployment.
+  - `_evaluator_ops.py`: Agent evaluation helpers.
+  - `project_client.py`: `VertexAIProjectClient` wrapper.
+
+## Memory & Telemetry
+- Use `_memory_ops.py` for persistent agent memory retrieval and updates.
+- Utilize ADK telemetry features (`_telemetry.py`) for observing agent performance and tracing calls.

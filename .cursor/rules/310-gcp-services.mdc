@@ -1,0 +1,22 @@
+---
+description: Google Cloud services usage (Firestore, GCS, Cloud Run, Pub/Sub) for CMS.
+alwaysApply: false
+---
+
+# GCP Services (CMS)
+
+## Cloud Run & HTTPS
+- Deployed to `europe-west1`.
+- Use Cloud Scheduler to trigger background jobs via HTTPS endpoints (e.g., `/api/v1/scheduler/...`).
+
+## Cloud Storage (GCS)
+- Map uploads explicitly to the correct domain bucket (e.g., `markets.thecloudarchitect.io` vs `thecloudarchitect.io`).
+- Only sync the specific HTML/assets needed, avoiding full `website/` rsync where possible.
+
+## Pub/Sub & CDN
+- `PUBSUB_TOPIC_PUBLISH_ARTICLE` handles durable publish tails.
+- Trigger Cloud CDN cache invalidation via URL map operations post-publish.
+
+## Firestore
+- Abide by established collection naming structures.
+- Firestore emulator can be used locally.

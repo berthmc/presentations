@@ -1,0 +1,41 @@
+services:
+  pptx-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: api
+    ports:
+      - "8090:8090"
+    environment:
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - MCP_TRANSPORT=http
+      - DATA_DIR=/data
+    volumes:
+      - pptx-data:/data
+      - ../documentation:/app/documentation:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  pptx-ui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ui
+    ports:
+      - "8091:8091"
+    environment:
+      - API_BASE_URL=http://pptx-api:8090
+      - DATA_DIR=/data
+    volumes:
+      - pptx-data:/data
+    depends_on:
+      pptx-api:
+        condition: service_healthy
+
+volumes:
+  pptx-data:
