@@ -34,7 +34,7 @@ RUN mkdir -p /data/staging /data/output /data/templates /data/uploads /data/qa
 
 EXPOSE 8090 8091
 
-COPY docker/entrypoint.sh /entrypoint.sh
+COPY presentations/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

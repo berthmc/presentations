@@ -14,7 +14,7 @@ function App() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <h1>PPTX Generation Engine</h1>
+        <h1>Presentations@Carmélites</h1>
         <p>Local-first LLM presentation builder with MD3 styling and visual QA</p>
       </header>
       <DiagnosticsCard />

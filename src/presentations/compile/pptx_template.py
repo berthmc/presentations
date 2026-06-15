@@ -6,6 +6,7 @@ from loguru import logger
 from pptx import Presentation
 
 from presentations.core.schemas import DeckSpec, LayoutProfile
+from presentations.llm.layout_validate import sanitize_deck_spec
 
 
 def _find_placeholder(slide, ph_idx: int):
@@ -36,6 +37,9 @@ def compile_from_template(
     template = Path(template_path)
     destination = Path(output_path)
     destination.parent.mkdir(parents=True, exist_ok=True)
+
+    if layout_profile is not None:
+        deck_spec = sanitize_deck_spec(deck_spec, layout_profile)
 
     prs = Presentation(str(template))
     # Remove existing slides from template preview deck
