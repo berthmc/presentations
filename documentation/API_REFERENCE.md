@@ -126,6 +126,9 @@ Run the full pipeline: LLM synthesis → compile → optional visual QA.
 | `mode` | `"scratch"` \| `"template"` | `"scratch"` | Compile path |
 | `title` | string | null | Deck title override |
 | `run_qa` | bool | `true` | Run visual QA loop after compile |
+| `source_context` | string | null | Optional PDF-derived text for factual grounding (not the brief) |
+| `allow_cloud` | bool | `false` | When true, Gemini may be used for synthesis fallback and vision QA |
+| `synthesis_model` | string | null | Ollama tag or Gemini model id override |
 
 **Example**
 
@@ -134,10 +137,11 @@ POST /generate
 Content-Type: application/json
 
 {
-  "brief": "Four-slide overview of local-first LLM pipelines for enterprise document automation.",
+  "brief": "Topic: EU cloud adoption\nAudience: Enterprise architects\nTarget length: 6 slides",
+  "source_context": "# Annual report\n\nEU cloud spend rose 12% YoY.",
   "template_id": "abc123...",
   "mode": "scratch",
-  "title": "Local-First PPTX Engine",
+  "title": "EU Cloud Adoption 2026",
   "run_qa": false
 }
 ```
@@ -156,6 +160,24 @@ Content-Type: application/json
 ### POST /generate/upload
 
 Multipart variant: same fields as `/generate` plus optional `template` file upload. Uploaded templates are auto-registered in the library.
+
+### POST /ingest/pdf
+
+Extract Markdown from an uploaded PDF for use as `source_context` during generation (grounding reference, not the brief).
+
+**Request:** multipart form with `file` (`.pdf`).
+
+**Response:**
+
+```json
+{
+  "source_context": "# Report title\n\nExtracted body…",
+  "filename": "report.pdf",
+  "text": "# Report title\n\nExtracted body…"
+}
+```
+
+The `text` field is retained for backward compatibility.
 
 ---
 

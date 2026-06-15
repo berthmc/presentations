@@ -14,6 +14,7 @@ async def run_qa_loop(
     pptx_path: str | Path,
     deck_spec: DeckSpec | None = None,
     max_iterations: int | None = None,
+    allow_cloud: bool = False,
 ) -> QAReport:
     """Render and audit a deck, repeating up to max_iterations.
 
@@ -21,6 +22,7 @@ async def run_qa_loop(
         pptx_path: Generated presentation path.
         deck_spec: Optional deck spec (reserved for auto-fix iterations).
         max_iterations: Override settings max iterations.
+        allow_cloud: When True, Gemini vision may be used when local VLM is unavailable.
 
     Returns:
         Final QAReport.
@@ -33,7 +35,7 @@ async def run_qa_loop(
     for iteration in range(1, iterations_limit + 1):
         logger.info("QA iteration {}/{}", iteration, iterations_limit)
         images = await render_slides_to_images(pptx)
-        report = await audit_slide_images(images)
+        report = await audit_slide_images(images, allow_cloud=allow_cloud)
         report.iterations = iteration
         if report.passed:
             logger.info("QA passed on iteration {}", iteration)

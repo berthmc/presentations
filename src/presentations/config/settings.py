@@ -23,12 +23,17 @@ class Settings(BaseSettings):
     ollama_synthesis_model: str = Field(default="qwen2.5:3b", alias="OLLAMA_SYNTHESIS_MODEL")
     ollama_vlm_model: str = Field(default="qwen2.5vl:7b", alias="OLLAMA_VLM_MODEL")
     ollama_supports_vlm: bool | None = Field(default=None, alias="OLLAMA_SUPPORTS_VLM")
+    ollama_num_predict: int = Field(default=4096, alias="OLLAMA_NUM_PREDICT")
+    ollama_num_ctx: int = Field(default=16384, alias="OLLAMA_NUM_CTX")
+    ollama_temperature: float = Field(default=0.1, alias="OLLAMA_TEMPERATURE")
+    ollama_max_source_context_chars: int = Field(default=4000, alias="OLLAMA_MAX_SOURCE_CONTEXT_CHARS")
 
     google_cloud_project: str = Field(default="", alias="GOOGLE_CLOUD_PROJECT")
     google_cloud_location: str = Field(default="europe-west1", alias="GOOGLE_CLOUD_LOCATION")
     gemini_model: str = Field(default="gemini-2.0-flash", alias="GEMINI_MODEL")
     gemini_vision_model: str = Field(default="gemini-2.0-flash", alias="GEMINI_VISION_MODEL")
 
+    allow_cloud_llm_default: bool = Field(default=False, alias="ALLOW_CLOUD_LLM_DEFAULT")
     hardware_profile: str = Field(default="auto", alias="HARDWARE_PROFILE")
     qa_max_iterations: int = Field(default=3, alias="QA_MAX_ITERATIONS")
     qa_render_dpi: int = Field(default=150, alias="QA_RENDER_DPI")

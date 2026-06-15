@@ -39,9 +39,12 @@ def _check_geometric(image_path: Path, slide_number: int) -> list[QAIssue]:
     return issues
 
 
-async def audit_slide_images(image_paths: list[str | Path]) -> QAReport:
+async def audit_slide_images(
+    image_paths: list[str | Path],
+    allow_cloud: bool = False,
+) -> QAReport:
     """Audit rendered slide images with geometry + optional VLM."""
-    router = LLMRouter()
+    router = LLMRouter(allow_cloud=allow_cloud)
     vision = await router.get_vision_provider()
     all_issues: list[QAIssue] = []
     all_reasons: list[str] = []

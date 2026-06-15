@@ -72,13 +72,18 @@ Copy from [`.env.example`](../.env.example). Key settings:
 | `DATA_DIR` | `./data` | All runtime data |
 | `API_PORT` | `8090` | FastAPI listen port |
 | `OLLAMA_HOST` | `http://localhost:11434` | Local LLM |
+| `OLLAMA_NUM_PREDICT` | `4096` | Max output tokens for Ollama synthesis |
+| `OLLAMA_NUM_CTX` | `16384` | Ollama context window (`num_ctx`); raise if prompts overflow |
+| `OLLAMA_TEMPERATURE` | `0.1` | Ollama synthesis temperature |
+| `OLLAMA_MAX_SOURCE_CONTEXT_CHARS` | `4000` | Max PDF source text chars in Ollama prompts (Gemini uncapped) |
+| `ALLOW_CLOUD_LLM_DEFAULT` | `false` | Operator default for cloud LLM; users opt in per-request via UI `allow_cloud` |
 | `HARDWARE_PROFILE` | `auto` | `integrated`, `discrete`, or `auto` |
 | `QA_MAX_ITERATIONS` | `3` | Visual QA retry limit |
 | `GOOGLE_CLOUD_PROJECT` | — | Gemini/Vertex fallback |
-| `PDF_MCP_URL` | `http://localhost:3005/mcp` | PDF Toolbox MCP for brief ingestion |
+| `PDF_MCP_URL` | `http://localhost:3005/mcp` | PDF Toolbox MCP for source document extraction |
 | `PDF_MCP_WORKSPACE_DIR` | `../pdf/mcp-workspace` | Shared workspace for staged PDF uploads |
 
-PDF brief ingestion requires the [PDF Toolbox](https://github.com/berthmc/pdf) MCP service on port 3005. In Docker, `presentations/docker-compose.yml` mounts `../pdf/mcp-workspace` and sets `PDF_MCP_URL=http://host.docker.internal:3005/mcp`.
+PDF source document ingestion requires the [PDF Toolbox](https://github.com/berthmc/pdf) MCP service on port 3005. Upload a PDF in the UI (or call `POST /ingest/pdf`), then generate with both a **brief** (presentation intent) and optional **`source_context`** (extracted PDF text for factual grounding). In Docker, `presentations/docker-compose.yml` bind-mounts `../../pdf/mcp-workspace` (sibling repo) to `/pdf-mcp-workspace` so staged PDFs are visible to the PDF MCP container.
 
 Frontend (Vite): see [`frontend/.env.example`](../frontend/.env.example). Default dev setup uses `/api` proxy — no env file required.
 
@@ -129,8 +134,11 @@ Invoke-RestMethod http://localhost:8090/diagnostics
 ### API starts but generation fails
 
 - Confirm Ollama is running: `ollama list`
-- Check logs: `data/logs/pptx.log`
-- Set `GOOGLE_CLOUD_PROJECT` for Gemini fallback if Ollama is unavailable
+- Check logs: `docker compose -f presentations/docker-compose.yml logs pptx-api`
+- By default, generation uses **local Ollama only**. Enable **Allow Gemini (cloud AI)** in the UI to permit Vertex AI fallback when Ollama fails or is unavailable.
+- Set `GOOGLE_CLOUD_PROJECT` and credentials when using cloud AI.
+- In Docker with a discrete GPU host, set `HARDWARE_PROFILE=discrete` in `.env` to use `deepseek-r1:14b` instead of `qwen2.5:3b`
+- Selecting a Gemini model in the synthesis dropdown implicitly enables cloud AI for synthesis.
 
 ### Visual QA skipped
 

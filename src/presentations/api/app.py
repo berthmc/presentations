@@ -13,7 +13,7 @@ from presentations.config.settings import get_settings
 from presentations.core.profiles import run_hardware_diagnostics
 from presentations.core.schemas import GenerateRequest, GenerationMode
 from presentations.ingest.discover import discover_layout
-from presentations.ingest.pdf_ingest import extract_brief_from_pdf
+from presentations.ingest.pdf_ingest import extract_source_context_from_pdf
 from presentations.llm.catalog import list_available_models
 from presentations.mcp.server import mcp as mcp_server
 from presentations.qa.loop import run_qa_loop
@@ -153,7 +153,7 @@ async def discover_layout_endpoint(template_path: str) -> dict:
 
 @app.post("/ingest/pdf")
 async def ingest_pdf(file: UploadFile = File(...)) -> dict[str, str]:
-    """Extract Markdown brief text from an uploaded PDF."""
+    """Extract Markdown source context from an uploaded PDF for synthesis grounding."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="File is required")
     suffix = Path(file.filename).suffix.lower()
@@ -165,14 +165,18 @@ async def ingest_pdf(file: UploadFile = File(...)) -> dict[str, str]:
     try:
         with staging.open("wb") as handle:
             shutil.copyfileobj(file.file, handle)
-        text = await extract_brief_from_pdf(staging)
+        source_context = await extract_source_context_from_pdf(staging)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     finally:
         if staging.exists():
             staging.unlink()
 
-    return {"text": text}
+    return {
+        "source_context": source_context,
+        "filename": file.filename,
+        "text": source_context,
+    }
 
 
 @app.post("/generate")
@@ -193,6 +197,8 @@ async def generate_upload(
     run_qa: bool = Form(False),
     template_id: str | None = Form(None),
     synthesis_model: str | None = Form(None),
+    source_context: str | None = Form(None),
+    allow_cloud: bool = Form(False),
     template: UploadFile | None = File(None),
 ) -> dict:
     """Generate a presentation with optional library template or ad-hoc upload."""
@@ -223,8 +229,13 @@ async def generate_upload(
         title=title,
         run_qa=run_qa,
         synthesis_model=synthesis_model,
+        source_context=source_context,
+        allow_cloud=allow_cloud,
     )
-    result = await generate_presentation(request)
+    try:
+        result = await generate_presentation(request)
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return result.model_dump()
 
 

@@ -1,4 +1,5 @@
 import type { Diagnostics, GenerateResult, ModelsResponse, TemplateSummary } from "../types";
+import { parseApiError } from "./errors";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
@@ -6,7 +7,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, init);
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(detail || response.statusText);
+    throw new Error(parseApiError(response.status, detail, response.statusText));
   }
   return response.json() as Promise<T>;
 }
@@ -34,7 +35,8 @@ export async function registerTemplate(
   form.append("file", file);
   const response = await fetch(`${API_BASE}/templates`, { method: "POST", body: form });
   if (!response.ok) {
-    throw new Error(await response.text());
+    const detail = await response.text();
+    throw new Error(parseApiError(response.status, detail, "Template upload failed"));
   }
   return response.json();
 }
@@ -54,6 +56,8 @@ export function generateDeck(payload: {
   run_qa: boolean;
   template_id?: string | null;
   synthesis_model?: string | null;
+  source_context?: string | null;
+  allow_cloud?: boolean;
 }): Promise<GenerateResult> {
   return request("/generate", {
     method: "POST",
@@ -62,14 +66,19 @@ export function generateDeck(payload: {
   });
 }
 
-export async function ingestPdf(file: File): Promise<{ text: string }> {
+export async function ingestPdf(file: File): Promise<{ source_context: string; filename?: string }> {
   const form = new FormData();
   form.append("file", file);
   const response = await fetch(`${API_BASE}/ingest/pdf`, { method: "POST", body: form });
   if (!response.ok) {
-    throw new Error(await response.text());
+    const detail = await response.text();
+    throw new Error(parseApiError(response.status, detail, "PDF extraction failed"));
   }
-  return response.json() as Promise<{ text: string }>;
+  const body = (await response.json()) as { source_context: string; filename?: string; text?: string };
+  return {
+    source_context: body.source_context ?? body.text ?? "",
+    filename: body.filename,
+  };
 }
 
 export function qaSlideUrl(imagePath: string): string {
