@@ -13,6 +13,7 @@ from presentations.config.settings import get_settings
 from presentations.core.profiles import run_hardware_diagnostics
 from presentations.core.schemas import GenerateRequest, GenerationMode
 from presentations.ingest.discover import discover_layout
+from presentations.ingest.pdf_ingest import extract_brief_from_pdf
 from presentations.mcp.server import mcp as mcp_server
 from presentations.qa.loop import run_qa_loop
 from presentations.services.pipeline import generate_presentation
@@ -141,6 +142,30 @@ async def discover_layout_endpoint(template_path: str) -> dict:
         raise HTTPException(status_code=404, detail=f"Template not found: {template_path}")
     profile = discover_layout(path)
     return profile.model_dump()
+
+
+@app.post("/ingest/pdf")
+async def ingest_pdf(file: UploadFile = File(...)) -> dict[str, str]:
+    """Extract Markdown brief text from an uploaded PDF."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="File is required")
+    suffix = Path(file.filename).suffix.lower()
+    if suffix != ".pdf":
+        raise HTTPException(status_code=400, detail="Only .pdf files are supported")
+
+    settings = get_settings()
+    staging = settings.uploads_dir / f"brief_{file.filename}"
+    try:
+        with staging.open("wb") as handle:
+            shutil.copyfileobj(file.file, handle)
+        text = extract_brief_from_pdf(staging)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        if staging.exists():
+            staging.unlink()
+
+    return {"text": text}
 
 
 @app.post("/generate")

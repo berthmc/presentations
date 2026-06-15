@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { downloadUrl, generateDeck, qaSlideUrl } from "../api/client";
+import { useRef, useState } from "react";
+import { downloadUrl, generateDeck, ingestPdf, qaSlideUrl } from "../api/client";
 import type { GenerateResult } from "../types";
 
 interface Props {
@@ -16,6 +16,27 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
   const [status, setStatus] = useState("");
   const [result, setResult] = useState<GenerateResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [ingesting, setIngesting] = useState(false);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+
+  async function handlePdfUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+    setIngesting(true);
+    setStatus("Extracting PDF…");
+    try {
+      const { text } = await ingestPdf(file);
+      setBrief(text);
+      setStatus(`Loaded brief from ${file.name}`);
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "PDF extraction failed");
+    } finally {
+      setIngesting(false);
+    }
+  }
 
   async function handleGenerate() {
     if (!brief.trim()) {
@@ -66,6 +87,21 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
           onChange={(event) => setBrief(event.target.value)}
           placeholder="Describe the presentation you want…"
         />
+        <input
+          ref={pdfInputRef}
+          type="file"
+          accept=".pdf,application/pdf"
+          hidden
+          onChange={handlePdfUpload}
+        />
+        <button
+          type="button"
+          className="outline"
+          onClick={() => pdfInputRef.current?.click()}
+          disabled={busy || ingesting}
+        >
+          {ingesting ? "Extracting PDF…" : "Upload PDF"}
+        </button>
       </div>
       <div className="checkbox-row">
         <input id="run-qa" type="checkbox" checked={runQa} onChange={(event) => setRunQa(event.target.checked)} />

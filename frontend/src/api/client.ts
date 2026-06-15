@@ -57,6 +57,16 @@ export function generateDeck(payload: {
   });
 }
 
+export async function ingestPdf(file: File): Promise<{ text: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${API_BASE}/ingest/pdf`, { method: "POST", body: form });
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+  return response.json() as Promise<{ text: string }>;
+}
+
 export function qaSlideUrl(imagePath: string): string {
   const normalized = imagePath.replace(/\\/g, "/");
   const parts = normalized.split("/");
