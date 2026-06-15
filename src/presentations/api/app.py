@@ -14,12 +14,13 @@ from presentations.core.profiles import run_hardware_diagnostics
 from presentations.core.schemas import GenerateRequest, GenerationMode
 from presentations.ingest.discover import discover_layout
 from presentations.ingest.pdf_ingest import extract_brief_from_pdf
+from presentations.llm.catalog import list_available_models
 from presentations.mcp.server import mcp as mcp_server
 from presentations.qa.loop import run_qa_loop
 from presentations.services.pipeline import generate_presentation
 from presentations.services.template_registry import get_template_registry
 
-app = FastAPI(title="PPTX Generation Engine", version="0.1.0")
+app = FastAPI(title="Presentations@Carmélites", version="0.1.0")
 app.mount("/mcp", mcp_server.http_app())
 
 app.add_middleware(
@@ -56,6 +57,12 @@ async def health() -> dict[str, str]:
 async def diagnostics() -> dict[str, object]:
     """Return hardware and model profile diagnostics."""
     return run_hardware_diagnostics()
+
+
+@app.get("/models")
+async def list_models() -> dict[str, object]:
+    """Return synthesis model catalog with availability flags."""
+    return await list_available_models()
 
 
 @app.get("/templates")
@@ -185,6 +192,7 @@ async def generate_upload(
     title: str | None = Form(None),
     run_qa: bool = Form(False),
     template_id: str | None = Form(None),
+    synthesis_model: str | None = Form(None),
     template: UploadFile | None = File(None),
 ) -> dict:
     """Generate a presentation with optional library template or ad-hoc upload."""
@@ -214,6 +222,7 @@ async def generate_upload(
         mode=GenerationMode(mode),
         title=title,
         run_qa=run_qa,
+        synthesis_model=synthesis_model,
     )
     result = await generate_presentation(request)
     return result.model_dump()

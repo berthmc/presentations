@@ -99,6 +99,54 @@ body {
   resize: vertical;
 }
 
+.field textarea.textarea-md {
+  min-height: 120px;
+}
+
+.field textarea.textarea-sm {
+  min-height: 96px;
+}
+
+.brief-guidance {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  color: var(--md-sys-color-on-surface-variant);
+  line-height: 1.45;
+}
+
+.field-help {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--md-sys-color-on-surface-variant);
+  line-height: 1.4;
+}
+
+.field-help.subtle {
+  font-size: 0.75rem;
+}
+
+.field-help.error {
+  color: var(--md-sys-color-error);
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.text-link {
+  display: inline-block;
+  margin-bottom: 0.85rem;
+  padding: 0;
+  min-height: auto;
+  border-radius: 0;
+  background: transparent;
+  color: var(--md-sys-color-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
 .checkbox-row {
   display: flex;
   align-items: center;

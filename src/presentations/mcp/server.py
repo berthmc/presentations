@@ -84,6 +84,7 @@ async def generate_deck(
     mode: str = "scratch",
     title: str | None = None,
     run_qa: bool = True,
+    synthesis_model: str | None = None,
 ) -> str:
     """Generate a presentation from a content brief.
 
@@ -94,6 +95,7 @@ async def generate_deck(
         mode: 'template' or 'scratch'.
         title: Optional deck title.
         run_qa: Whether to run visual QA after generation.
+        synthesis_model: Optional synthesis model override (Ollama tag or Gemini id).
 
     Returns:
         JSON with output_path, deck_spec, qa_report, and layout_profile.
@@ -105,6 +107,7 @@ async def generate_deck(
         mode=GenerationMode(mode),
         title=title,
         run_qa=run_qa,
+        synthesis_model=synthesis_model,
     )
     try:
         result = await generate_presentation(request)

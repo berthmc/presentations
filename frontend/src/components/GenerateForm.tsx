@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import { downloadUrl, generateDeck, ingestPdf, qaSlideUrl } from "../api/client";
 import type { GenerateResult } from "../types";
+import { composeBrief, EXAMPLE_BRIEF } from "../utils/brief";
+import { ModelSelector } from "./ModelSelector";
 
 interface Props {
   templateId: string;
@@ -11,13 +13,29 @@ interface Props {
 
 export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props) {
   const [title, setTitle] = useState("");
-  const [brief, setBrief] = useState("");
+  const [topic, setTopic] = useState("");
+  const [audience, setAudience] = useState("");
+  const [goal, setGoal] = useState("");
+  const [tone, setTone] = useState("");
+  const [slideCount, setSlideCount] = useState("");
+  const [keyPoints, setKeyPoints] = useState("");
+  const [synthesisModel, setSynthesisModel] = useState("auto");
   const [runQa, setRunQa] = useState(false);
   const [status, setStatus] = useState("");
   const [result, setResult] = useState<GenerateResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [ingesting, setIngesting] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
+
+  function loadExampleBrief() {
+    setTopic(EXAMPLE_BRIEF.topic);
+    setAudience(EXAMPLE_BRIEF.audience);
+    setGoal(EXAMPLE_BRIEF.goal);
+    setTone(EXAMPLE_BRIEF.tone);
+    setSlideCount(EXAMPLE_BRIEF.slideCount);
+    setKeyPoints(EXAMPLE_BRIEF.keyPoints);
+    setStatus("Loaded example brief.");
+  }
 
   async function handlePdfUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -29,8 +47,8 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
     setStatus("Extracting PDF…");
     try {
       const { text } = await ingestPdf(file);
-      setBrief(text);
-      setStatus(`Loaded brief from ${file.name}`);
+      setTopic(text);
+      setStatus(`Loaded topic from ${file.name}`);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "PDF extraction failed");
     } finally {
@@ -39,10 +57,18 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
   }
 
   async function handleGenerate() {
-    if (!brief.trim()) {
-      setStatus("Enter a content brief.");
+    if (!topic.trim()) {
+      setStatus("Enter a topic or details for the presentation.");
       return;
     }
+    const brief = composeBrief({
+      topic,
+      audience,
+      goal,
+      tone,
+      slideCount,
+      keyPoints,
+    });
     setBusy(true);
     setStatus("Generating…");
     setResult(null);
@@ -54,6 +80,7 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
         title: title || undefined,
         run_qa: runQa,
         template_id: templateId || null,
+        synthesis_model: synthesisModel === "auto" ? undefined : synthesisModel,
       });
       setResult(payload);
       onResult(payload);
@@ -68,6 +95,14 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
   return (
     <section className="md3-card">
       <h2>Generate Presentation</h2>
+      <p className="brief-guidance">
+        Describe your presentation using the fields below. Provide at least a topic; audience, goal, tone, target
+        length, and key points help the model structure slides appropriately. This is a content brief, not a
+        per-slide design script.
+      </p>
+      <button type="button" className="text-link" onClick={loadExampleBrief}>
+        Load example brief
+      </button>
       <div className="field">
         <label htmlFor="title">Title</label>
         <input id="title" value={title} onChange={(event) => setTitle(event.target.value)} />
@@ -79,13 +114,15 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
           <option value="template">template</option>
         </select>
       </div>
+      <ModelSelector value={synthesisModel} onChange={setSynthesisModel} />
       <div className="field">
-        <label htmlFor="brief">Content brief</label>
+        <label htmlFor="topic">Topic / details</label>
         <textarea
-          id="brief"
-          value={brief}
-          onChange={(event) => setBrief(event.target.value)}
-          placeholder="Describe the presentation you want…"
+          id="topic"
+          className="textarea-md"
+          value={topic}
+          onChange={(event) => setTopic(event.target.value)}
+          placeholder="Main subject and any context the model should know…"
         />
         <input
           ref={pdfInputRef}
@@ -102,6 +139,57 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
         >
           {ingesting ? "Extracting PDF…" : "Upload PDF"}
         </button>
+      </div>
+      <div className="field-grid">
+        <div className="field">
+          <label htmlFor="audience">Audience</label>
+          <input
+            id="audience"
+            value={audience}
+            onChange={(event) => setAudience(event.target.value)}
+            placeholder="e.g. EU retail investors"
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="goal">Goal</label>
+          <input
+            id="goal"
+            value={goal}
+            onChange={(event) => setGoal(event.target.value)}
+            placeholder="e.g. Explain regulatory impact"
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="tone">Tone</label>
+          <input
+            id="tone"
+            value={tone}
+            onChange={(event) => setTone(event.target.value)}
+            placeholder="e.g. Professional, objective"
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="slide-count">Target length (slides)</label>
+          <input
+            id="slide-count"
+            type="number"
+            min={1}
+            max={50}
+            value={slideCount}
+            onChange={(event) => setSlideCount(event.target.value)}
+            placeholder="e.g. 8"
+          />
+        </div>
+      </div>
+      <div className="field">
+        <label htmlFor="key-points">Key points</label>
+        <textarea
+          id="key-points"
+          className="textarea-sm"
+          value={keyPoints}
+          onChange={(event) => setKeyPoints(event.target.value)}
+          placeholder="One point per line…"
+        />
       </div>
       <div className="checkbox-row">
         <input id="run-qa" type="checkbox" checked={runQa} onChange={(event) => setRunQa(event.target.checked)} />

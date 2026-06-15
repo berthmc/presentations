@@ -107,6 +107,7 @@ class GenerateRequest(BaseModel):
     mode: GenerationMode = GenerationMode.SCRATCH
     title: str | None = None
     run_qa: bool = True
+    synthesis_model: str | None = None
 
 
 class GenerateResult(BaseModel):
