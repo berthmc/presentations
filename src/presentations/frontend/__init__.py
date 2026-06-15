@@ -1,1 +1,1 @@
-"""NiceGUI MD3 frontend."""
+"""Legacy package path — UI lives in repo-root ``frontend/`` (React + Vite)."""

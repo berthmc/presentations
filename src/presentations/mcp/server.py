@@ -14,14 +14,52 @@ from presentations.core.schemas import GenerateRequest, GenerationMode
 from presentations.ingest.discover import discover_layout
 from presentations.qa.loop import run_qa_loop
 from presentations.services.pipeline import generate_presentation
+from presentations.services.template_registry import get_template_registry
 
 mcp = FastMCP(
     name="pptx-engine",
     instructions=(
         "Generate PowerPoint presentations from templates (.pptx/.md) or from scratch using MD3 styling. "
-        "Tools: discover_layout, generate_deck, render_qa, hardware_diagnostics."
+        "Tools: list_templates, register_template, discover_layout, generate_deck, render_qa, hardware_diagnostics."
     ),
 )
+
+
+@mcp.tool()
+async def list_templates() -> str:
+    """List all templates in the persistent template library.
+
+    Returns:
+        JSON array of template summaries (id, name, source_type, is_default, layout_count).
+    """
+    registry = get_template_registry()
+    summaries = registry.list_templates()
+    return json.dumps([item.model_dump(mode="json") for item in summaries], indent=2)
+
+
+@mcp.tool()
+async def register_template(name: str, template_path: str, is_default: bool = False) -> str:
+    """Register a .pptx or .md file in the persistent template library.
+
+    Args:
+        name: User-facing template name.
+        template_path: Path to the template file on disk.
+        is_default: Whether to set this as the default template.
+
+    Returns:
+        JSON summary of the registered template including template_id.
+    """
+    path = Path(template_path)
+    if not path.exists():
+        return json.dumps({"error": f"File not found: {template_path}"})
+    registry = get_template_registry()
+    try:
+        record = registry.register(name, path, is_default=is_default, original_filename=path.name)
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)})
+    summary = record.summary().model_dump(mode="json")
+    summary["template_id"] = record.id
+    return json.dumps(summary, indent=2)
 
 
 @mcp.tool()
@@ -41,6 +79,7 @@ async def discover_layout_tool(template_path: str) -> str:
 @mcp.tool()
 async def generate_deck(
     brief: str,
+    template_id: str | None = None,
     template_path: str | None = None,
     mode: str = "scratch",
     title: str | None = None,
@@ -50,7 +89,8 @@ async def generate_deck(
 
     Args:
         brief: Content brief describing the desired presentation.
-        template_path: Optional .pptx or .md template path.
+        template_id: Optional library template id (preferred over template_path).
+        template_path: Optional ad-hoc .pptx or .md template path.
         mode: 'template' or 'scratch'.
         title: Optional deck title.
         run_qa: Whether to run visual QA after generation.
@@ -60,12 +100,16 @@ async def generate_deck(
     """
     request = GenerateRequest(
         brief=brief,
+        template_id=template_id,
         template_path=template_path,
         mode=GenerationMode(mode),
         title=title,
         run_qa=run_qa,
     )
-    result = await generate_presentation(request)
+    try:
+        result = await generate_presentation(request)
+    except (ValueError, FileNotFoundError) as exc:
+        return json.dumps({"error": str(exc)})
     return result.model_dump_json(indent=2)
 
 
@@ -108,6 +152,7 @@ def main() -> None:
     settings = get_settings()
     configure_logging(settings.log_level)
     settings.ensure_dirs()
+    get_template_registry().seed_builtin_templates()
 
     transport = args.transport or settings.mcp_transport or "stdio"
     logger.info("Starting MCP server transport={}", transport)

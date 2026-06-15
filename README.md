@@ -6,19 +6,37 @@ Local-first LLM-powered PowerPoint generation with Material Design 3 styling, te
 
 - **Template-driven generation** via `python-pptx` (corporate `.pptx` themes preserved)
 - **From-scratch generation** via `pptxgenjs` with MD3 tokens
+- **Persistent template library** with `template_id` across sessions
 - **Markdown templates** (`.md`) with layout placeholders
 - **Local Ollama** synthesis with **Gemini/Vertex** cloud fallback
 - **Visual QA loop**: LibreOffice → PDF → JPEG → VLM + geometric checks
-- **Surfaces**: NiceGUI MD3 web UI, FastAPI REST, **MCP server** for Cursor and Antigravity
+- **Surfaces**: React + Vite MD3 web UI, FastAPI REST, **MCP server** for Cursor and Antigravity
+
+## Documentation
+
+Full docs: **[documentation/README.md](documentation/README.md)**
+
+| Guide | Description |
+|-------|-------------|
+| [Development](documentation/DEVELOPMENT_GUIDE.md) | Setup, Docker, testing |
+| [API Reference](documentation/API_REFERENCE.md) | REST endpoints |
+| [Architecture](documentation/SYSTEM_ARCHITECTURE.md) | Pipeline and components |
+| [MCP Integration](documentation/MCP_INTEGRATION.md) | Cursor / Antigravity |
+| [Template Library](documentation/TEMPLATE_LIBRARY_GUIDE.md) | Upload and reuse templates |
 
 ## Quick start
 
 ```powershell
 Copy-Item .env.example .env
-pip install ".[dev]"
+pip install -e ".[dev]"
 cd src/presentations/compile/node; npm install; cd ../../../..
+cd frontend; npm install; cd ..
+
+# Terminal 1 — API
 pptx-api    # http://localhost:8090
-pptx-ui     # http://localhost:8091
+
+# Terminal 2 — React UI (proxies /api -> :8090)
+cd frontend; npm run dev    # http://localhost:8091
 ```
 
 ### Docker
@@ -27,11 +45,12 @@ pptx-ui     # http://localhost:8091
 docker compose -f docker/docker-compose.yml up --build
 ```
 
+- API: http://localhost:8090 (OpenAPI at `/docs`)
+- UI: http://localhost:8091
+
 ## MCP (Cursor + Antigravity)
 
-Self-hosted first-party MCP server — not a third-party/shadow MCP.
-
-### Stdio (IDE-spawned)
+Self-hosted first-party MCP server — see [documentation/MCP_INTEGRATION.md](documentation/MCP_INTEGRATION.md).
 
 ```json
 {
@@ -39,65 +58,24 @@ Self-hosted first-party MCP server — not a third-party/shadow MCP.
     "pptx": {
       "command": "pptx-mcp",
       "args": ["--transport", "stdio"],
-      "env": {
-        "OLLAMA_HOST": "http://localhost:11434"
-      }
+      "env": { "OLLAMA_HOST": "http://localhost:11434", "DATA_DIR": "./data" }
     }
   }
 }
 ```
-
-### HTTP (container)
-
-```json
-{
-  "mcpServers": {
-    "pptx": {
-      "url": "http://localhost:8090/mcp"
-    }
-  }
-}
-```
-
-### Tools
-
-| Tool | Description |
-|------|-------------|
-| `discover_layout_tool` | Parse `.pptx` or `.md` template layouts |
-| `generate_deck` | Full pipeline: synthesize → compile → optional QA |
-| `render_qa` | Render existing deck and run visual QA |
-| `hardware_diagnostics` | Host RAM/GPU profile and model selection |
-
-## Architecture
-
-See [documentation/briefs/architecture.md](documentation/briefs/architecture.md).
 
 ## Sample assets
 
 - Template: [templates/sample-deck.md](templates/sample-deck.md)
 - Brief: [templates/sample-brief.txt](templates/sample-brief.txt)
 
-## Hardware profiles
-
-| Profile | Synthesis | VLM |
-|---------|-----------|-----|
-| Integrated (Radeon 780M) | `qwen2.5:3b` | optional |
-| Discrete (RTX 5070 Ti) | `deepseek-r1:14b` | `qwen2.5-vl:7b` |
-
-Run diagnostics:
-
-```powershell
-.\scripts\profile_diag.ps1
-curl http://localhost:8090/diagnostics
-```
-
 ## Development
 
 ```powershell
 pytest
-ruff check src tests
+ruff check src tests scripts
 ```
 
 ## Repository
 
-Version control: [berthmc/presentations](https://github.com/berthmc/presentations)
+[berthmc/presentations](https://github.com/berthmc/presentations) — default branch `dev`

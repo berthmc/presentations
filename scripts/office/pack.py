@@ -2,7 +2,6 @@
 """Repack an unpacked PPTX directory."""
 
 import argparse
-import shutil
 import zipfile
 from pathlib import Path
 

@@ -24,15 +24,9 @@ services:
   pptx-ui:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
-    command: ui
+      dockerfile: docker/Dockerfile.ui
     ports:
       - "8091:8091"
-    environment:
-      - API_BASE_URL=http://pptx-api:8090
-      - DATA_DIR=/data
-    volumes:
-      - pptx-data:/data
     depends_on:
       pptx-api:
         condition: service_healthy
