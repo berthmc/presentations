@@ -1,13 +1,21 @@
 """LLM-driven deck specification synthesis."""
 
+from __future__ import annotations
+
 import json
 from typing import Any
 
 from loguru import logger
 from pydantic import ValidationError
 
-from presentations.config.settings import get_settings
-from presentations.core.schemas import DeckSpec, GenerationMode, LayoutProfile
+from presentations.config.settings import Settings, get_settings
+from presentations.core.schemas import (
+    DeckSpec,
+    DigestEntry,
+    GenerationMode,
+    LayoutProfile,
+    SourceDigest,
+)
 from presentations.llm.base import LLMProvider
 from presentations.llm.layout_validate import validate_deck_against_layout
 from presentations.llm.router import LLMRouter
@@ -41,24 +49,59 @@ DECK_SYNTHESIS_JSON_SCHEMA: dict[str, Any] = {
     "required": ["title", "slides"],
 }
 
+DIGEST_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "facts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "claim": {"type": "string"},
+                    "source_quote": {"type": "string"},
+                    "slide_topic_hint": {"type": "string"},
+                },
+                "required": ["claim"],
+            },
+        }
+    },
+    "required": ["facts"],
+}
+
 SYNTHESIS_SYSTEM_PROMPT = """You are a presentation architect. Given a content brief, optional source document,
 and available slide layouts, produce a strict JSON deck specification.
 
 Rules:
 - The brief defines presentation intent, structure, and audience.
-- When a source document is provided, ground slide content in its facts; do not copy large verbatim blocks;
-  prefer concise bullet synthesis.
-- When source documents are provided with '--- Document: name ---' separators, synthesise content across all
-  documents; attribute facts to the source where relevant.
+- When a source document or structured digest is provided, ground slide content in its facts.
+- Extract specific facts, numbers, terminology, and technical details from the source and place them
+  on the appropriate slides.
+- When source documents are provided with '--- Document: name ---' or '--- Context7: name ---' separators,
+  synthesise content across all documents; attribute facts to the source where relevant.
 - If brief and source conflict, prefer the brief for structure and the source for factual accuracy.
+- When a source document or digest is present, every content slide must reference at least one specific
+  fact, figure, metric, or concept drawn from it.
 - Use layout_index values from the provided layout profile only.
 - Map content to ph_idx placeholder indices exactly as listed for each layout.
 - ph_idx values are often non-sequential (for example 0, 10, 11). Never invent placeholder indices.
 - For each slide, only use ph_idx values listed under allowed_ph_idx for that layout_index.
 - Vary layouts across slides; avoid repeating the same layout for every slide.
-- Keep bullet points concise; use \\n for line breaks within a placeholder.
+- Keep bullet points concise but substantive; use \\n for line breaks within a placeholder.
 - When the brief includes "Target length: N slides", produce approximately N slides.
 - Return JSON matching the required schema with title and slides fields.
+"""
+
+DIGEST_SYSTEM_PROMPT = """You are a technical analyst preparing source material for a presentation.
+Extract the most important facts, statistics, concepts, and architectural components from the
+provided source text.
+
+Rules:
+- Return strict JSON with a facts array.
+- Each fact must include claim (required), source_quote (short supporting excerpt), and
+  slide_topic_hint (which slide theme the fact supports).
+- Prefer concrete details: numbers, product names, protocols, latency figures, deployment patterns.
+- Do not invent facts not supported by the source text.
+- Produce up to 20 facts per chunk.
 """
 
 
@@ -105,6 +148,126 @@ def _build_user_prompt(
         ]
     )
     return "\n".join(parts)
+
+
+def _build_digest_user_prompt(source_chunk: str, brief: str) -> str:
+    """Build the user prompt for the digest phase."""
+    return (
+        f"Brief (for relevance):\n{brief}\n\n"
+        f"Source chunk:\n{source_chunk}\n\n"
+        "Extract the most important presentation-ready facts as JSON."
+    )
+
+
+def _chunk_text(text: str, chunk_size: int) -> list[str]:
+    """Split long source text into overlapping-free chunks."""
+    if len(text) <= chunk_size:
+        return [text]
+    chunks: list[str] = []
+    start = 0
+    while start < len(text):
+        chunks.append(text[start : start + chunk_size])
+        start += chunk_size
+    return chunks
+
+
+def _merge_digests(digests: list[SourceDigest]) -> SourceDigest:
+    """Merge digest chunks and deduplicate facts by claim text."""
+    seen: set[str] = set()
+    merged: list[DigestEntry] = []
+    for digest in digests:
+        for fact in digest.facts:
+            key = fact.claim.strip().casefold()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            merged.append(fact)
+    return SourceDigest(facts=merged)
+
+
+async def _digest_chunk_with_provider(
+    provider: LLMProvider,
+    *,
+    brief: str,
+    source_chunk: str,
+) -> SourceDigest:
+    """Run digest extraction for a single source chunk."""
+    from presentations.llm.ollama_provider import OllamaProvider
+
+    user_prompt = _build_digest_user_prompt(source_chunk, brief)
+    if isinstance(provider, OllamaProvider):
+        payload = await provider.generate_json(
+            DIGEST_SYSTEM_PROMPT,
+            user_prompt,
+            json_schema=DIGEST_JSON_SCHEMA,
+        )
+    else:
+        payload = await provider.generate_json(DIGEST_SYSTEM_PROMPT, user_prompt)
+    return SourceDigest.model_validate(payload)
+
+
+async def digest_source_context(
+    source_context: str,
+    brief: str,
+    *,
+    synthesis_model: str | None = None,
+    allow_cloud: bool = False,
+    settings: Settings | None = None,
+) -> SourceDigest:
+    """Extract structured facts from source material before deck synthesis."""
+    settings = settings or get_settings()
+    router = LLMRouter(synthesis_model_override=synthesis_model, allow_cloud=allow_cloud)
+    providers = await router.get_synthesis_providers()
+    if not providers:
+        raise ValueError("No synthesis providers available for digest phase")
+
+    chunks = _chunk_text(source_context, settings.digest_chunk_chars)
+    provider = providers[0]
+    digests: list[SourceDigest] = []
+
+    for index, chunk in enumerate(chunks, start=1):
+        try:
+            digest = await _digest_chunk_with_provider(provider, brief=brief, source_chunk=chunk)
+            digests.append(digest)
+            logger.info(
+                "Digest chunk {}/{} produced {} facts via {}",
+                index,
+                len(chunks),
+                len(digest.facts),
+                provider.name,
+            )
+        except (ValidationError, ValueError, KeyError) as exc:
+            logger.warning("Digest chunk {} failed: {}", index, exc)
+
+    return _merge_digests(digests)
+
+
+async def _prepare_source_context(
+    source_context: str | None,
+    brief: str,
+    *,
+    synthesis_model: str | None,
+    allow_cloud: bool,
+    settings: Settings,
+) -> str | None:
+    """Optionally digest raw source context into compact grounding text."""
+    if not source_context or not settings.enable_digest_phase:
+        return source_context
+
+    digest = await digest_source_context(
+        source_context,
+        brief,
+        synthesis_model=synthesis_model,
+        allow_cloud=allow_cloud,
+        settings=settings,
+    )
+    digest_text = digest.to_prompt_text()
+    if not digest_text:
+        logger.warning("Digest phase returned no facts; using raw source context")
+        return source_context
+
+    logger.info("Using structured digest with {} facts for synthesis", len(digest.facts))
+    return digest_text
 
 
 def _payload_to_deck(
@@ -197,6 +360,15 @@ async def synthesize_deck_spec(
     Returns:
         Validated DeckSpec.
     """
+    settings = get_settings()
+    prepared_source = await _prepare_source_context(
+        source_context,
+        brief,
+        synthesis_model=synthesis_model,
+        allow_cloud=allow_cloud,
+        settings=settings,
+    )
+
     router = LLMRouter(synthesis_model_override=synthesis_model, allow_cloud=allow_cloud)
     providers = await router.get_synthesis_providers()
 
@@ -215,7 +387,7 @@ async def synthesize_deck_spec(
                 brief=brief,
                 layout=layout,
                 mode=mode,
-                source_context=source_context,
+                source_context=prepared_source,
                 title=title,
             )
             logger.info("Synthesized deck with {} slides via {}", len(deck.slides), provider.name)

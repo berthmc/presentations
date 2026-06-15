@@ -41,6 +41,33 @@ class LayoutProfile(BaseModel):
         return [self.layouts[idx].name for idx in sorted(self.layouts.keys())]
 
 
+class DigestEntry(BaseModel):
+    """One fact extracted from a source document during the digest phase."""
+
+    claim: str
+    source_quote: str = ""
+    slide_topic_hint: str = ""
+
+
+class SourceDigest(BaseModel):
+    """Structured digest produced before deck synthesis."""
+
+    facts: list[DigestEntry] = Field(default_factory=list)
+
+    def to_prompt_text(self) -> str:
+        """Render digest facts as compact text for synthesis prompts."""
+        if not self.facts:
+            return ""
+        lines = ["Structured source digest (ground facts for slide content):"]
+        for index, fact in enumerate(self.facts, start=1):
+            lines.append(f"{index}. {fact.claim}")
+            if fact.source_quote:
+                lines.append(f"   Source: {fact.source_quote}")
+            if fact.slide_topic_hint:
+                lines.append(f"   Slide hint: {fact.slide_topic_hint}")
+        return "\n".join(lines)
+
+
 class PlaceholderMapping(BaseModel):
     """Content mapped to a placeholder index."""
 
