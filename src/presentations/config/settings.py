@@ -24,7 +24,9 @@ class Settings(BaseSettings):
     ollama_vlm_model: str = Field(default="qwen2.5vl:7b", alias="OLLAMA_VLM_MODEL")
     ollama_supports_vlm: bool | None = Field(default=None, alias="OLLAMA_SUPPORTS_VLM")
     ollama_num_predict: int = Field(default=4096, alias="OLLAMA_NUM_PREDICT")
+    ollama_num_ctx: int = Field(default=16384, alias="OLLAMA_NUM_CTX")
     ollama_temperature: float = Field(default=0.1, alias="OLLAMA_TEMPERATURE")
+    ollama_max_source_context_chars: int = Field(default=4000, alias="OLLAMA_MAX_SOURCE_CONTEXT_CHARS")
 
     google_cloud_project: str = Field(default="", alias="GOOGLE_CLOUD_PROJECT")
     google_cloud_location: str = Field(default="europe-west1", alias="GOOGLE_CLOUD_LOCATION")

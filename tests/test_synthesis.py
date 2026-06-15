@@ -19,6 +19,32 @@ def test_build_user_prompt_includes_source_context() -> None:
     assert "Source document (grounding reference):\n# Report" in prompt
 
 
+def test_build_user_prompt_truncates_source_context_when_capped() -> None:
+    long_source = "A" * 100
+    prompt = _build_user_prompt(
+        brief="Topic: EU cloud adoption",
+        layout=None,
+        mode=GenerationMode.SCRATCH,
+        source_context=long_source,
+        max_source_chars=40,
+    )
+    assert "Source document (grounding reference):\n" + ("A" * 40) in prompt
+    assert "[Source truncated to 40 chars for local model]" in prompt
+    assert "A" * 41 not in prompt
+
+
+def test_build_user_prompt_no_truncation_note_without_cap() -> None:
+    long_source = "B" * 100
+    prompt = _build_user_prompt(
+        brief="Topic: EU cloud adoption",
+        layout=None,
+        mode=GenerationMode.SCRATCH,
+        source_context=long_source,
+    )
+    assert long_source in prompt
+    assert "[Source truncated" not in prompt
+
+
 def test_build_user_prompt_omits_source_when_none() -> None:
     prompt = _build_user_prompt(
         brief="Topic: EU cloud adoption",

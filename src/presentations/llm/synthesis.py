@@ -6,6 +6,7 @@ from typing import Any
 from loguru import logger
 from pydantic import ValidationError
 
+from presentations.config.settings import get_settings
 from presentations.core.schemas import DeckSpec, GenerationMode, LayoutProfile
 from presentations.llm.base import LLMProvider
 from presentations.llm.layout_validate import validate_deck_against_layout
@@ -79,6 +80,7 @@ def _build_user_prompt(
     layout: LayoutProfile | None,
     mode: GenerationMode,
     source_context: str | None = None,
+    max_source_chars: int | None = None,
 ) -> str:
     """Build the user prompt for synthesis."""
     if layout:
@@ -88,7 +90,11 @@ def _build_user_prompt(
 
     parts = [f"Brief:\n{brief}\n"]
     if source_context:
-        parts.append(f"Source document (grounding reference):\n{source_context}\n")
+        ctx = source_context
+        if max_source_chars is not None and len(source_context) > max_source_chars:
+            ctx = source_context[:max_source_chars]
+            ctx += f"\n[Source truncated to {max_source_chars} chars for local model]"
+        parts.append(f"Source document (grounding reference):\n{ctx}\n")
     parts.extend(
         [
             f"Generation mode: {mode.value}\n",
@@ -118,18 +124,23 @@ def _payload_to_deck(
 
 async def _generate_with_provider(
     provider: LLMProvider,
-    user_prompt: str,
     max_retries: int,
     *,
-    title: str | None,
-    mode: GenerationMode,
+    brief: str,
     layout: LayoutProfile | None,
+    mode: GenerationMode,
+    source_context: str | None,
+    title: str | None,
 ) -> DeckSpec:
     """Run synthesis attempts against a single provider."""
     from presentations.llm.ollama_provider import OllamaProvider
 
+    settings = get_settings()
+    max_src = settings.ollama_max_source_context_chars if isinstance(provider, OllamaProvider) else None
+    base_prompt = _build_user_prompt(brief, layout, mode, source_context, max_source_chars=max_src)
+
     last_error: Exception | None = None
-    prompt = user_prompt
+    prompt = base_prompt
     for attempt in range(max_retries + 1):
         try:
             if isinstance(provider, OllamaProvider):
@@ -150,7 +161,7 @@ async def _generate_with_provider(
                 exc,
             )
             prompt = (
-                f"{user_prompt}\n\nPrevious response was invalid: {exc}. "
+                f"{base_prompt}\n\nPrevious response was invalid: {exc}. "
                 "Fix the JSON and return a valid deck specification. "
                 "Use only layout_index and ph_idx values from the layout profile."
             )
@@ -186,7 +197,6 @@ async def synthesize_deck_spec(
     """
     router = LLMRouter(synthesis_model_override=synthesis_model, allow_cloud=allow_cloud)
     providers = await router.get_synthesis_providers()
-    user_prompt = _build_user_prompt(brief, layout, mode, source_context)
 
     last_error: Exception | None = None
     for provider_index, provider in enumerate(providers):
@@ -199,11 +209,12 @@ async def synthesize_deck_spec(
         try:
             deck = await _generate_with_provider(
                 provider,
-                user_prompt,
                 max_retries,
-                title=title,
-                mode=mode,
+                brief=brief,
                 layout=layout,
+                mode=mode,
+                source_context=source_context,
+                title=title,
             )
             logger.info("Synthesized deck with {} slides via {}", len(deck.slides), provider.name)
             return deck

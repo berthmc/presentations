@@ -72,8 +72,10 @@ Copy from [`.env.example`](../.env.example). Key settings:
 | `DATA_DIR` | `./data` | All runtime data |
 | `API_PORT` | `8090` | FastAPI listen port |
 | `OLLAMA_HOST` | `http://localhost:11434` | Local LLM |
-| `OLLAMA_NUM_PREDICT` | `4096` | Max tokens for Ollama synthesis |
+| `OLLAMA_NUM_PREDICT` | `4096` | Max output tokens for Ollama synthesis |
+| `OLLAMA_NUM_CTX` | `16384` | Ollama context window (`num_ctx`); raise if prompts overflow |
 | `OLLAMA_TEMPERATURE` | `0.1` | Ollama synthesis temperature |
+| `OLLAMA_MAX_SOURCE_CONTEXT_CHARS` | `4000` | Max PDF source text chars in Ollama prompts (Gemini uncapped) |
 | `ALLOW_CLOUD_LLM_DEFAULT` | `false` | Operator default for cloud LLM; users opt in per-request via UI `allow_cloud` |
 | `HARDWARE_PROFILE` | `auto` | `integrated`, `discrete`, or `auto` |
 | `QA_MAX_ITERATIONS` | `3` | Visual QA retry limit |
