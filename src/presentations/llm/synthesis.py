@@ -48,6 +48,8 @@ Rules:
 - The brief defines presentation intent, structure, and audience.
 - When a source document is provided, ground slide content in its facts; do not copy large verbatim blocks;
   prefer concise bullet synthesis.
+- When source documents are provided with '--- Document: name ---' separators, synthesise content across all
+  documents; attribute facts to the source where relevant.
 - If brief and source conflict, prefer the brief for structure and the source for factual accuracy.
 - Use layout_index values from the provided layout profile only.
 - Map content to ph_idx placeholder indices exactly as listed for each layout.

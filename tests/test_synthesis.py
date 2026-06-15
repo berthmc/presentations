@@ -19,6 +19,23 @@ def test_build_user_prompt_includes_source_context() -> None:
     assert "Source document (grounding reference):\n# Report" in prompt
 
 
+def test_build_user_prompt_preserves_multi_document_separators() -> None:
+    merged = (
+        "--- Document: report-a.pdf ---\nCloud spend rose 12%.\n\n"
+        "--- Document: report-b.pdf ---\nEU adoption accelerated."
+    )
+    prompt = _build_user_prompt(
+        brief="Topic: EU cloud adoption",
+        layout=None,
+        mode=GenerationMode.SCRATCH,
+        source_context=merged,
+    )
+    assert "--- Document: report-a.pdf ---" in prompt
+    assert "--- Document: report-b.pdf ---" in prompt
+    assert "Cloud spend rose 12%." in prompt
+    assert "EU adoption accelerated." in prompt
+
+
 def test_build_user_prompt_truncates_source_context_when_capped() -> None:
     long_source = "A" * 100
     prompt = _build_user_prompt(
