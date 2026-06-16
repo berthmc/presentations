@@ -44,5 +44,6 @@ async def run_qa_loop(
             logger.warning("QA failed and no auto-fix deck_spec provided; stopping")
             break
 
-    assert report is not None
+    if report is None:
+        raise RuntimeError("QA loop produced no report")
     return report

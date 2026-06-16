@@ -13,7 +13,9 @@ build/
 # Environment & secrets
 .env
 secrets/
+credentials/
 *.json.key
+vertexai_sa.json
 
 # Runtime data
 data/

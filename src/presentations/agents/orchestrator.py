@@ -83,8 +83,8 @@ async def generate_presentation(request: GenerateRequest) -> GenerateResult:
             theme=load_md3_theme("tech"),
         )
 
-    assert state.deck_spec is not None
-    assert state.output_path is not None
+    if state.deck_spec is None or state.output_path is None:
+        raise RuntimeError("Pipeline finished without producing a deck spec and output path")
 
     return GenerateResult(
         output_path=state.output_path,

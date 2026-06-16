@@ -23,6 +23,26 @@ from presentations.services.template_registry import get_template_registry
 app = FastAPI(title="Presentations@Carmélites", version="0.1.0")
 app.mount("/mcp", mcp_server.http_app())
 
+
+def _resolve_within(base: Path, candidate: Path) -> Path:
+    """Resolve ``candidate`` and ensure it stays inside ``base``.
+
+    Args:
+        base: Directory that the candidate must remain within.
+        candidate: User-influenced path to validate.
+
+    Returns:
+        The fully resolved candidate path.
+
+    Raises:
+        HTTPException: With status 400 when the resolved path escapes ``base``.
+    """
+    base_resolved = base.resolve()
+    target = candidate.resolve()
+    if base_resolved != target and base_resolved not in target.parents:
+        raise HTTPException(status_code=400, detail="Invalid path")
+    return target
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -143,8 +163,9 @@ async def set_default_template(template_id: str) -> dict:
 
 @app.post("/discover-layout")
 async def discover_layout_endpoint(template_path: str) -> dict:
-    """Discover layout profile from a template path."""
-    path = Path(template_path)
+    """Discover layout profile from a template path within the data directory."""
+    settings = get_settings()
+    path = _resolve_within(settings.data_dir, Path(template_path))
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"Template not found: {template_path}")
     profile = discover_layout(path)
@@ -209,14 +230,17 @@ async def generate_upload(
     if template and template.filename:
         suffix = Path(template.filename).suffix.lower()
         dest = settings.uploads_dir / f"{Path(template.filename).stem}_{template.filename}"
-        with dest.open("wb") as handle:
-            shutil.copyfileobj(template.file, handle)
-        registry = get_template_registry()
-        record = registry.register(
-            name=Path(template.filename).stem,
-            source_path=dest,
-            original_filename=template.filename,
-        )
+        try:
+            with dest.open("wb") as handle:
+                shutil.copyfileobj(template.file, handle)
+            registry = get_template_registry()
+            record = registry.register(
+                name=Path(template.filename).stem,
+                source_path=dest,
+                original_filename=template.filename,
+            )
+        finally:
+            dest.unlink(missing_ok=True)
         resolved_template_id = record.id
         if suffix == ".pptx":
             mode = GenerationMode.TEMPLATE.value
@@ -241,8 +265,9 @@ async def generate_upload(
 
 @app.post("/qa/render")
 async def qa_render(pptx_path: str) -> dict:
-    """Run QA on an existing presentation."""
-    path = Path(pptx_path)
+    """Run QA on an existing presentation within the output directory."""
+    settings = get_settings()
+    path = _resolve_within(settings.output_dir, Path(pptx_path))
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"File not found: {pptx_path}")
     try:
@@ -256,8 +281,10 @@ async def qa_render(pptx_path: str) -> dict:
 async def download(filename: str) -> FileResponse:
     """Download a generated presentation."""
     settings = get_settings()
-    path = settings.output_dir / filename
-    if not path.exists():
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    path = _resolve_within(settings.output_dir, settings.output_dir / filename)
+    if not path.exists() or not path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(
         path,
