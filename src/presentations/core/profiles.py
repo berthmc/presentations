@@ -39,9 +39,9 @@ INTEGRATED_PROFILE = ModelProfile(
 
 DISCRETE_PROFILE = ModelProfile(
     name=HardwareProfileName.DISCRETE,
-    synthesis_model="deepseek-r1:14b",
+    synthesis_model="qwen2.5:7b",
     vlm_model="qwen2.5vl:7b",
-    description="RTX 5070 Ti — 14B synthesis + 7B VLM",
+    description="RTX 5070 Ti — 7B synthesis + 7B VLM",
     supports_vlm=True,
 )
 

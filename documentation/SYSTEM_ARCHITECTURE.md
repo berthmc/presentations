@@ -96,8 +96,10 @@ Detected automatically (or overridden via `HARDWARE_PROFILE`):
 
 | Profile | Synthesis model | VLM |
 |---------|-----------------|-----|
-| Integrated (Radeon 780M) | `qwen2.5:3b` | Optional / degraded |
-| Discrete (RTX 5070 Ti) | `deepseek-r1:14b` | `qwen2.5-vl:7b` |
+| Integrated (Radeon 780M) | `qwen2.5:7b` | `qwen2.5vl:7b` (optional) |
+| Discrete (RTX 5070 Ti) | `qwen2.5:7b` | `qwen2.5vl:7b` |
+
+Supported local synthesis models (UI catalog): `qwen2.5:7b`, `qwen2.5:3b`, `llama3.2:3b`. VLM audit uses `qwen2.5vl:7b`.
 
 ## Docker topology
 

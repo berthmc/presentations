@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import {
   deleteTemplate,
   listTemplates,
@@ -6,6 +6,7 @@ import {
   setDefaultTemplate,
 } from "../api/client";
 import type { TemplateSummary } from "../types";
+import { TextField } from "./TextField";
 
 interface Props {
   selectedId: string;
@@ -116,39 +117,53 @@ export function TemplateLibrary({ selectedId, onSelect, onModeHint }: Props) {
     }
   }
 
-  function handleSelectChange(event: React.ChangeEvent<HTMLSelectElement>) {
-    const id = event.target.value;
-    onSelect(id);
-    const selected = templates.find((item) => item.id === id);
-    if (selected?.source_type === "pptx") {
+  function handleChipSelect(template: TemplateSummary) {
+    onSelect(template.id);
+    if (template.source_type === "pptx") {
       onModeHint("template");
     }
   }
 
   return (
     <section className="md3-card">
-      <h2>Template Library</h2>
-      <div className="field">
-        <label htmlFor="template-select">Saved template</label>
-        <select id="template-select" value={selectedId} onChange={handleSelectChange}>
-          <option value="">None</option>
-          {templates.map((template) => (
-            <option key={template.id} value={template.id}>
-              {template.name} ({template.source_type})
-              {template.is_default ? " *" : ""}
-            </option>
-          ))}
-        </select>
+      <header className="section-header">
+        <h2>Template Library</h2>
+        <span className="section-header__meta">{templates.length} template(s)</span>
+      </header>
+
+      <p className="text-field__hint" style={{ margin: "0 0 1rem" }}>
+        Select a saved template or upload a new .pptx / .md layout.
+      </p>
+
+      <div className="chip-row" role="listbox" aria-label="Saved templates">
+        {templates.length === 0 && (
+          <span className="chip chip--assist">No templates yet</span>
+        )}
+        {templates.map((template) => (
+          <button
+            key={template.id}
+            type="button"
+            role="option"
+            aria-selected={selectedId === template.id}
+            className={`chip${selectedId === template.id ? " chip--selected" : ""}`}
+            onClick={() => handleChipSelect(template)}
+          >
+            {template.name}
+            <span className="signal-tile__badge signal-tile__badge--neutral">
+              {template.source_type}
+            </span>
+            {template.is_default && " · default"}
+          </button>
+        ))}
       </div>
-      <div className="field">
-        <label htmlFor="template-name">Template name</label>
-        <input
-          id="template-name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="e.g. Acme Corporate 2026"
-        />
-      </div>
+
+      <TextField
+        id="template-name"
+        label="Template name"
+        value={name}
+        onChange={(event: ChangeEvent<HTMLInputElement>) => setName(event.target.value)}
+      />
+
       <div className="checkbox-row">
         <input
           id="template-default"
@@ -158,48 +173,71 @@ export function TemplateLibrary({ selectedId, onSelect, onModeHint }: Props) {
         />
         <label htmlFor="template-default">Set as default</label>
       </div>
-      <div className="field">
-        <label>Template file</label>
+
+      <div className="source-doc-row">
         <input
           ref={fileInputRef}
           type="file"
+          className="hidden-input"
           accept=".pptx,.md,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/markdown"
-          hidden
           onChange={handleFileSelect}
         />
-        <div className="btn-row">
-          <button
-            type="button"
-            className="outline"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={busy}
-          >
-            Choose file
-          </button>
-          <button
-            type="button"
-            className="primary"
-            onClick={handleSave}
-            disabled={busy || !pendingFile || !name.trim()}
-          >
-            {busy ? "Saving…" : "Save to library"}
-          </button>
-        </div>
-        <p className="field-help subtle">
-          {pendingFile ? `Selected: ${pendingFile.name}` : "Accepts .pptx and .md templates"}
-        </p>
+        <button
+          type="button"
+          className="tonal btn-with-icon"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={busy}
+        >
+          <span className="material-symbols-rounded">upload_file</span>
+          Choose file
+        </button>
+        {pendingFile && (
+          <span className="chip chip--input">
+            {pendingFile.name}
+            <button
+              type="button"
+              className="chip__dismiss"
+              aria-label="Clear selected file"
+              onClick={() => setPendingFile(null)}
+            >
+              <span className="material-symbols-rounded">close</span>
+            </button>
+          </span>
+        )}
+        <button
+          type="button"
+          className="primary btn-with-icon"
+          onClick={handleSave}
+          disabled={busy || !pendingFile || !name.trim()}
+        >
+          <span className="material-symbols-rounded">save</span>
+          {busy ? "Saving…" : "Save to library"}
+        </button>
       </div>
-      <div className="btn-row">
-        <button type="button" className="outline" onClick={handleSetDefault} disabled={!selectedId || busy}>
+      <p className="text-field__hint">Accepts .pptx and .md templates</p>
+
+      <div className="btn-row" style={{ marginTop: "1rem" }}>
+        <button
+          type="button"
+          className="outlined btn-with-icon"
+          onClick={handleSetDefault}
+          disabled={!selectedId || busy}
+        >
+          <span className="material-symbols-rounded">star</span>
           Set default
         </button>
-        <button type="button" className="danger" onClick={handleDelete} disabled={!selectedId || busy}>
+        <button
+          type="button"
+          className="danger btn-with-icon"
+          onClick={handleDelete}
+          disabled={!selectedId || busy}
+        >
+          <span className="material-symbols-rounded">delete</span>
           Delete
         </button>
       </div>
-      <p className={`status${statusIsError ? " error" : ""}`}>
-        {status || `${templates.length} template(s) in library`}
-      </p>
+
+      <p className={`status${statusIsError ? " error" : ""}`}>{status}</p>
     </section>
   );
 }

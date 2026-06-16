@@ -141,13 +141,13 @@ The application scales its execution boundaries dynamically based on host hardwa
                    Is external GPU (OCuLink) active?
                    ├─── Yes ──► [ RTX 5070 Ti Profile ]
                    │            • VRAM: 16 GB GDDR7 Dedicated
-                   │            • Models: deepseek-r1:14b + qwen2.5-vl:7b
+                   │            • Models: qwen2.5:7b + qwen2.5vl:7b
                    │            • Pipeline Capacity: High-speed local visual audit
                    │
                    └─── No ───► [ Integrated Radeon 780M Profile ]
                                 • UMA Buffer: 8 GB Allocated (BIOS Spec)
                                 • Host OS RAM: ~20 GB (Docker Overhead)
-                                • Models: qwen2.5:3b (JSON layout compiler)
+                                • Models: qwen2.5:7b (default) or qwen2.5:3b / llama3.2:3b (lightweight)
                                 • Pipeline Capacity: Generation & layout discovery
 
 

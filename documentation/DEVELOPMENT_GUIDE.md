@@ -34,7 +34,9 @@ Optional: start Ollama and pull models:
 
 ```powershell
 ollama pull qwen2.5:7b
-ollama pull qwen2.5vl:7b   # optional, for VLM QA on discrete GPU profile
+ollama pull qwen2.5:3b
+ollama pull llama3.2:3b
+ollama pull qwen2.5vl:7b   # VLM QA (slide visual audit)
 ```
 
 ## Docker
@@ -143,7 +145,7 @@ Invoke-RestMethod http://localhost:8090/diagnostics
 - Check logs: `docker compose -f presentations/docker-compose.yml logs pptx-api`
 - By default, generation uses **local Ollama only**. Enable **Allow Gemini (cloud AI)** in the UI to permit Vertex AI fallback when Ollama fails or is unavailable.
 - Set `GOOGLE_CLOUD_PROJECT` and credentials when using cloud AI.
-- In Docker with a discrete GPU host, set `HARDWARE_PROFILE=discrete` in `.env` to use `deepseek-r1:14b` instead of `qwen2.5:7b`
+- In Docker with a discrete GPU host, set `HARDWARE_PROFILE=discrete` in `.env` to enable VLM QA with `qwen2.5vl:7b` (synthesis defaults to `qwen2.5:7b` on both profiles)
 - Selecting a Gemini model in the synthesis dropdown implicitly enables cloud AI for synthesis.
 
 ### Visual QA skipped
