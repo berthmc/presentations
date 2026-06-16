@@ -58,6 +58,26 @@ class Settings(BaseSettings):
     enable_digest_phase: bool = Field(default=True, alias="ENABLE_DIGEST_PHASE")
     digest_chunk_chars: int = Field(default=8000, alias="DIGEST_CHUNK_CHARS")
 
+    vllm_base_url: str = Field(default="http://localhost:8000/v1", alias="VLLM_BASE_URL")
+    vllm_model: str = Field(
+        default="Qwen/Qwen2.5-Coder-14B-Instruct-AWQ",
+        alias="VLLM_MODEL",
+    )
+    vllm_max_model_len: int = Field(default=16384, alias="VLLM_MAX_MODEL_LEN")
+    vllm_enabled: bool = Field(default=True, alias="VLLM_ENABLED")
+    vllm_read_timeout: float = Field(default=300.0, alias="VLLM_READ_TIMEOUT")
+
+    qdrant_url: str = Field(default="http://localhost:6333", alias="QDRANT_URL")
+    qdrant_collection: str = Field(default="pptx_research", alias="QDRANT_COLLECTION")
+    embedding_model: str = Field(default="bge-m3", alias="EMBEDDING_MODEL")
+    rag_enabled: bool = Field(default=True, alias="RAG_ENABLED")
+    rag_top_k: int = Field(default=10, alias="RAG_TOP_K")
+    rag_chunk_chars: int = Field(default=1500, alias="RAG_CHUNK_CHARS")
+
+    use_docling: bool = Field(default=True, alias="USE_DOCLING")
+    max_revisions: int = Field(default=3, alias="MAX_REVISIONS")
+    qa_vlm_enabled: bool = Field(default=False, alias="QA_VLM_ENABLED")
+
     @property
     def staging_dir(self) -> Path:
         """Directory for intermediate render artefacts."""

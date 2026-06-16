@@ -14,7 +14,7 @@ async def test_extract_source_context_from_pdf_returns_markdown(tmp_path: Path) 
     pdf_path.write_bytes(b"%PDF-1.4 fake")
 
     with patch(
-        "presentations.ingest.pdf_ingest.convert_pdf_to_markdown",
+        "presentations.ingest.pdf_ingest.parse_pdf_to_markdown",
         new=AsyncMock(return_value="# Title\n\nBody text"),
     ):
         result = await extract_source_context_from_pdf(pdf_path)
@@ -34,7 +34,7 @@ async def test_extract_source_context_from_pdf_rejects_empty_text(tmp_path: Path
     pdf_path.write_bytes(b"%PDF-1.4 fake")
 
     with patch(
-        "presentations.ingest.pdf_ingest.convert_pdf_to_markdown",
+        "presentations.ingest.pdf_ingest.parse_pdf_to_markdown",
         new=AsyncMock(side_effect=ValueError("PDF contains no extractable text")),
     ):
         with pytest.raises(ValueError, match="no extractable text"):

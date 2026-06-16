@@ -185,6 +185,14 @@ def _merge_digests(digests: list[SourceDigest]) -> SourceDigest:
     return SourceDigest(facts=merged)
 
 
+def _provider_supports_json_schema(provider: LLMProvider) -> bool:
+    """Return True when the provider accepts a JSON schema response format."""
+    from presentations.llm.ollama_provider import OllamaProvider
+    from presentations.llm.vllm_provider import VLLMProvider
+
+    return isinstance(provider, (OllamaProvider, VLLMProvider))
+
+
 async def _digest_chunk_with_provider(
     provider: LLMProvider,
     *,
@@ -192,10 +200,8 @@ async def _digest_chunk_with_provider(
     source_chunk: str,
 ) -> SourceDigest:
     """Run digest extraction for a single source chunk."""
-    from presentations.llm.ollama_provider import OllamaProvider
-
     user_prompt = _build_digest_user_prompt(source_chunk, brief)
-    if isinstance(provider, OllamaProvider):
+    if _provider_supports_json_schema(provider):
         payload = await provider.generate_json(
             DIGEST_SYSTEM_PROMPT,
             user_prompt,
@@ -298,9 +304,9 @@ async def _generate_with_provider(
     title: str | None,
 ) -> DeckSpec:
     """Run synthesis attempts against a single provider."""
+    settings = get_settings()
     from presentations.llm.ollama_provider import OllamaProvider
 
-    settings = get_settings()
     max_src = settings.ollama_max_source_context_chars if isinstance(provider, OllamaProvider) else None
     base_prompt = _build_user_prompt(brief, layout, mode, source_context, max_source_chars=max_src)
 
@@ -308,7 +314,7 @@ async def _generate_with_provider(
     prompt = base_prompt
     for attempt in range(max_retries + 1):
         try:
-            if isinstance(provider, OllamaProvider):
+            if _provider_supports_json_schema(provider):
                 payload = await provider.generate_json(
                     SYNTHESIS_SYSTEM_PROMPT,
                     prompt,

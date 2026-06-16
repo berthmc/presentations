@@ -52,13 +52,14 @@ async def test_qa_slide_image_endpoint(tmp_path: Path, monkeypatch: pytest.Monke
 async def test_generate_with_template_id_uses_registry(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Generate deck with template_id when synthesis is stubbed."""
     import presentations.config.settings as settings_module
-    from presentations.core.schemas import DeckSpec, GenerationMode, PlaceholderMapping, SlideSpec
+    from presentations.compile.pptxgen_runner import compile_from_scratch
+    from presentations.core.schemas import DeckSpec, GenerateResult, GenerationMode, PlaceholderMapping, SlideSpec
 
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     settings_module._settings = None
 
-    async def _fake_synthesize(**kwargs):
-        return DeckSpec(
+    async def _fake_generate(request):
+        deck = DeckSpec(
             title="E2E Deck",
             mode=GenerationMode.SCRATCH,
             slides=[
@@ -68,8 +69,17 @@ async def test_generate_with_template_id_uses_registry(monkeypatch: pytest.Monke
                 )
             ],
         )
+        output = tmp_path / "output" / "e2e.pptx"
+        output.parent.mkdir(parents=True, exist_ok=True)
+        await compile_from_scratch(deck, output)
+        return GenerateResult(
+            output_path=str(output.resolve()),
+            deck_spec=deck,
+            qa_report=None,
+            layout_profile=None,
+        )
 
-    monkeypatch.setattr("presentations.services.pipeline.synthesize_deck_spec", _fake_synthesize)
+    monkeypatch.setattr("presentations.api.app.generate_presentation", _fake_generate)
 
     transport = ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test", timeout=60.0) as client:

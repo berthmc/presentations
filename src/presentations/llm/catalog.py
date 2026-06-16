@@ -24,6 +24,15 @@ class CatalogModel:
 
 MODEL_CATALOG: tuple[CatalogModel, ...] = (
     CatalogModel(
+        id="qwen2.5-coder:14b-awq",
+        label="Qwen 2.5 Coder 14B AWQ (vLLM)",
+        provider="vllm",
+        recommended_for="Structured deck JSON, RTX 5060 Ti 16GB, agentic planning",
+        speed="medium",
+        quality="excellent",
+        notes="Default planner on discrete GPU via vLLM OpenAI API.",
+    ),
+    CatalogModel(
         id="qwen2.5:7b",
         label="Qwen 2.5 7B (local)",
         provider="ollama",
@@ -65,10 +74,19 @@ GEMINI_MODEL_IDS: frozenset[str] = frozenset(
     entry.id for entry in MODEL_CATALOG if entry.provider == "gemini"
 )
 
+VLLM_MODEL_IDS: frozenset[str] = frozenset(
+    entry.id for entry in MODEL_CATALOG if entry.provider == "vllm"
+)
+
 
 def is_gemini_model_id(model_id: str) -> bool:
     """Return True when the model id targets the Gemini provider."""
     return model_id.startswith("gemini") or model_id in GEMINI_MODEL_IDS
+
+
+def is_vllm_model_id(model_id: str) -> bool:
+    """Return True when the model id targets the vLLM provider."""
+    return model_id in VLLM_MODEL_IDS or model_id.startswith("qwen2.5-coder")
 
 
 async def _fetch_ollama_model_names() -> set[str]:
@@ -85,6 +103,14 @@ async def _fetch_ollama_model_names() -> set[str]:
     except httpx.HTTPError as exc:
         logger.warning("Failed to list Ollama models: {}", exc)
         return set()
+
+
+async def _vllm_is_reachable() -> bool:
+    """Return True when the vLLM OpenAI API responds."""
+    from presentations.llm.vllm_provider import VLLMProvider
+
+    provider = VLLMProvider()
+    return await provider.is_available()
 
 
 async def _ollama_is_reachable() -> bool:
@@ -117,11 +143,14 @@ async def list_available_models() -> dict[str, Any]:
     """Return the synthesis model catalog with availability flags."""
     installed = await _fetch_ollama_model_names()
     ollama_reachable = await _ollama_is_reachable()
+    vllm_reachable = await _vllm_is_reachable()
     models: list[dict[str, Any]] = []
 
     for entry in MODEL_CATALOG:
         if entry.provider == "ollama":
             available = ollama_reachable and _ollama_model_installed(entry.id, installed)
+        elif entry.provider == "vllm":
+            available = vllm_reachable
         else:
             available = _gemini_available()
 

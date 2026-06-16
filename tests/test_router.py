@@ -11,6 +11,7 @@ from presentations.llm.router import LLMRouter
 async def test_synthesis_providers_local_only_when_cloud_disabled() -> None:
     router = LLMRouter(allow_cloud=False)
     with (
+        patch.object(router.vllm, "is_available", new=AsyncMock(return_value=False)),
         patch.object(router.local, "is_available", new=AsyncMock(return_value=True)),
         patch.object(router.cloud, "is_configured", return_value=True),
     ):
@@ -24,6 +25,7 @@ async def test_synthesis_providers_local_only_when_cloud_disabled() -> None:
 async def test_synthesis_providers_include_gemini_fallback_when_cloud_allowed() -> None:
     router = LLMRouter(allow_cloud=True)
     with (
+        patch.object(router.vllm, "is_available", new=AsyncMock(return_value=False)),
         patch.object(router.local, "is_available", new=AsyncMock(return_value=True)),
         patch.object(router.cloud, "is_configured", return_value=True),
     ):
@@ -35,9 +37,26 @@ async def test_synthesis_providers_include_gemini_fallback_when_cloud_allowed() 
 
 
 @pytest.mark.asyncio
+async def test_synthesis_providers_vllm_first_when_available() -> None:
+    router = LLMRouter(allow_cloud=True)
+    with (
+        patch.object(router.vllm, "is_available", new=AsyncMock(return_value=True)),
+        patch.object(router.local, "is_available", new=AsyncMock(return_value=True)),
+        patch.object(router.cloud, "is_configured", return_value=True),
+    ):
+        providers = await router.get_synthesis_providers()
+
+    assert providers[0].name == "vllm"
+    assert any(provider.name == "ollama" for provider in providers)
+
+
+@pytest.mark.asyncio
 async def test_synthesis_providers_raises_when_ollama_down_and_cloud_disabled() -> None:
     router = LLMRouter(allow_cloud=False)
-    with patch.object(router.local, "is_available", new=AsyncMock(return_value=False)):
+    with (
+        patch.object(router.vllm, "is_available", new=AsyncMock(return_value=False)),
+        patch.object(router.local, "is_available", new=AsyncMock(return_value=False)),
+    ):
         with pytest.raises(RuntimeError, match="cloud LLM is disabled"):
             await router.get_synthesis_providers()
 
@@ -46,6 +65,7 @@ async def test_synthesis_providers_raises_when_ollama_down_and_cloud_disabled() 
 async def test_synthesis_providers_gemini_only_when_ollama_down_and_cloud_allowed() -> None:
     router = LLMRouter(allow_cloud=True)
     with (
+        patch.object(router.vllm, "is_available", new=AsyncMock(return_value=False)),
         patch.object(router.local, "is_available", new=AsyncMock(return_value=False)),
         patch.object(router.cloud, "is_configured", return_value=True),
     ):
@@ -59,6 +79,7 @@ async def test_synthesis_providers_gemini_only_when_ollama_down_and_cloud_allowe
 async def test_synthesis_providers_explicit_gemini_model_ignores_cloud_flag() -> None:
     router = LLMRouter(synthesis_model_override="gemini-2.5-pro", allow_cloud=False)
     with (
+        patch.object(router.vllm, "is_available", new=AsyncMock(return_value=True)),
         patch.object(router.local, "is_available", new=AsyncMock(return_value=True)),
         patch.object(router.cloud, "is_configured", return_value=True),
     ):

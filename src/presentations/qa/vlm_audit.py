@@ -3,40 +3,13 @@
 from pathlib import Path
 
 from loguru import logger
-from PIL import Image
 
+from presentations.agents.skill_rules import VISUAL_QA_PROMPT
 from presentations.core.schemas import QAIssue, QAReport
 from presentations.llm.router import LLMRouter
+from presentations.qa.geometric import check_geometric
 
-VLM_AUDIT_PROMPT = """Inspect this rendered slide image for visual bugs. Identify if any text overlaps other text,
-if bullet points collide with shapes, or if text contrast is illegible.
-Return strict JSON: {"passed": boolean, "reasons": ["..."]}
-"""
-
-
-def _check_geometric(image_path: Path, slide_number: int) -> list[QAIssue]:
-    """Run lightweight geometric heuristics on a slide image."""
-    issues: list[QAIssue] = []
-    with Image.open(image_path) as img:
-        width, height = img.size
-        margin_px = int(min(width, height) * 0.03)
-        rgb = img.convert("RGB")
-        # Sample edge pixels for potential content clipping (very dark/bright at edges)
-        edge_samples = []
-        for x in range(0, width, max(1, width // 20)):
-            edge_samples.append(rgb.getpixel((x, margin_px)))
-            edge_samples.append(rgb.getpixel((x, height - margin_px - 1)))
-        avg_brightness = sum(sum(p) for p in edge_samples) / (len(edge_samples) * 3)
-        if avg_brightness < 10 or avg_brightness > 245:
-            issues.append(
-                QAIssue(
-                    slide=slide_number,
-                    severity="warning",
-                    category="margin",
-                    message="Edge contrast suggests possible content clipping or insufficient margins",
-                )
-            )
-    return issues
+VLM_AUDIT_PROMPT = VISUAL_QA_PROMPT
 
 
 async def audit_slide_images(
@@ -52,7 +25,7 @@ async def audit_slide_images(
 
     for index, image_path in enumerate(image_paths, start=1):
         path = Path(image_path)
-        all_issues.extend(_check_geometric(path, index))
+        all_issues.extend(check_geometric(path, index))
 
         if vision is not None:
             try:
