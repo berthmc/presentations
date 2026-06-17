@@ -51,3 +51,26 @@ def test_set_default_and_delete(registry: TemplateRegistry) -> None:
 def test_resolve_missing_template_raises(registry: TemplateRegistry) -> None:
     with pytest.raises(KeyError):
         registry.resolve(template_id="missing-id")
+
+
+def test_get_default_pptx_prefers_first_pptx_when_default_is_md(registry: TemplateRegistry) -> None:
+    """get_default_pptx should return the first .pptx template when the default is .md."""
+    sample = Path("templates/sample-deck.md")
+    registry.register("MD Layout", sample, is_default=True)
+    pptx_record = registry.register("Corporate Deck", sample)
+
+    records = registry._load_records()
+    for record in records:
+        if record.id == pptx_record.id:
+            record.source_type = "pptx"
+    registry._save_records(records)
+
+    default_pptx = registry.get_default_pptx()
+    assert default_pptx is not None
+    assert default_pptx.id == pptx_record.id
+
+
+def test_get_default_pptx_returns_none_when_only_md_templates(registry: TemplateRegistry) -> None:
+    sample = Path("templates/sample-deck.md")
+    registry.register("MD Layout", sample, is_default=True)
+    assert registry.get_default_pptx() is None

@@ -10,9 +10,19 @@ def resolve_generation_context(
 ) -> tuple[str | None, LayoutProfile | None, GenerationMode]:
     """Resolve template path, cached layout profile, and effective generation mode."""
     registry = get_template_registry()
-    resolved = registry.resolve(template_id=request.template_id, template_path=request.template_path)
+    template_id = request.template_id
+    template_path = request.template_path
+
+    if request.mode == GenerationMode.TEMPLATE and not template_id and not template_path:
+        default_pptx = registry.get_default_pptx()
+        if default_pptx is not None:
+            template_id = default_pptx.id
+
+    resolved = registry.resolve(template_id=template_id, template_path=template_path)
 
     if resolved is None:
+        if request.mode == GenerationMode.TEMPLATE:
+            raise ValueError("template_id or template_path required for template mode")
         return None, None, request.mode
 
     mode = request.mode

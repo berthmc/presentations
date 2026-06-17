@@ -1,9 +1,10 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { listTemplates } from "./api/client";
 import { DiagnosticsCard } from "./components/DiagnosticsCard";
 import { GenerateForm } from "./components/GenerateForm";
 import { TemplateLibrary } from "./components/TemplateLibrary";
-import type { GenerateResult } from "./types";
+import type { GenerateResult, TemplateSummary } from "./types";
 import "./styles/md3.css";
 
 type TabId = "system" | "templates" | "brief";
@@ -32,11 +33,29 @@ function useTheme() {
 
 function App() {
   const [templateId, setTemplateId] = useState("");
+  const [templates, setTemplates] = useState<TemplateSummary[]>([]);
   const [mode, setMode] = useState<"scratch" | "template">("scratch");
   const [, setResult] = useState<GenerateResult | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("brief");
   const [scrolled, setScrolled] = useState(false);
   const { dark, toggle: toggleTheme } = useTheme();
+
+  useEffect(() => {
+    listTemplates()
+      .then(({ templates: loaded }) => {
+        setTemplates(loaded);
+        setTemplateId((current) => {
+          if (current) {
+            return current;
+          }
+          const defaultTemplate = loaded.find((item) => item.is_default) ?? loaded[0];
+          return defaultTemplate?.id ?? "";
+        });
+      })
+      .catch(() => {
+        /* template library unavailable; GenerateForm will surface errors on submit */
+      });
+  }, []);
 
   useEffect(() => {
     function onScroll() {
@@ -46,6 +65,8 @@ function App() {
     onScroll();
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  const selectedTemplate = templates.find((template) => template.id === templateId) ?? null;
 
   return (
     <div className="app-layout">
@@ -119,6 +140,7 @@ function App() {
           >
             <GenerateForm
               templateId={templateId}
+              templateSourceType={selectedTemplate?.source_type ?? null}
               mode={mode}
               onModeChange={setMode}
               onResult={setResult}
