@@ -2,12 +2,14 @@
 
 import base64
 import json
+import time
 from pathlib import Path
 from typing import Any
 
 import httpx
 from loguru import logger
 
+from presentations.config.pipeline_logging import log_llm_call
 from presentations.config.settings import get_settings
 from presentations.llm.base import LLMProvider
 
@@ -61,6 +63,8 @@ class OllamaProvider(LLMProvider):
                 "num_ctx": self.num_ctx,
             },
         }
+        prompt_chars = len(system_prompt) + len(user_prompt)
+        started = time.perf_counter()
         try:
             async with httpx.AsyncClient(timeout=self._timeout_generate) as client:
                 response = await client.post(f"{self.host}/api/chat", json=payload)
@@ -77,8 +81,9 @@ class OllamaProvider(LLMProvider):
                 f"Ollama did not respond within {self._timeout_generate.read}s. "
                 "Increase OLLAMA_READ_TIMEOUT_GENERATE or switch to a faster model."
             ) from exc
+        duration_s = time.perf_counter() - started
         try:
-            return parse_json_content(content)
+            parsed = parse_json_content(content)
         except json.JSONDecodeError as exc:
             done_reason = body.get("done_reason", "unknown")
             eval_count = body.get("eval_count", 0)
@@ -91,6 +96,15 @@ class OllamaProvider(LLMProvider):
                 content[:500],
             )
             raise ValueError("Ollama synthesis did not return valid JSON") from exc
+        log_llm_call(
+            provider=self.name,
+            model=self.synthesis_model,
+            duration_s=duration_s,
+            prompt_chars=prompt_chars,
+            prompt_tokens=body.get("prompt_eval_count"),
+            completion_tokens=body.get("eval_count"),
+        )
+        return parsed
 
     async def audit_slide_image(self, image_path: str, prompt: str) -> dict[str, Any]:
         """Run VLM audit on a slide image via Ollama."""

@@ -262,6 +262,8 @@ async def _prepare_source_context(
     if not digest_input or not settings.enable_digest_phase:
         return source_context
 
+    chunks = _chunk_text(digest_input, settings.digest_chunk_chars)
+    logger.info("Digest phase starting chunks={} chunk_chars={}", len(chunks), settings.digest_chunk_chars)
     digest = await digest_source_context(
         digest_input,
         brief,
@@ -401,7 +403,12 @@ async def synthesize_deck_spec(
                 source_context=prepared_source,
                 title=title,
             )
-            logger.info("Synthesized deck with {} slides via {}", len(deck.slides), provider.name)
+            logger.info(
+                "Synthesized deck with {} slides via {} model={}",
+                len(deck.slides),
+                provider.name,
+                getattr(provider, "model", getattr(provider, "synthesis_model", "unknown")),
+            )
             return deck
         except (ValidationError, ValueError, KeyError) as exc:
             last_error = exc

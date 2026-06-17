@@ -1,6 +1,7 @@
 """Stage 5: Constraint validation loop (Inspector)."""
 
 import asyncio
+from collections import Counter
 from pathlib import Path
 
 from loguru import logger
@@ -125,6 +126,26 @@ async def _audit_visual(
     return issues, reasons
 
 
+def _log_qa_summary(state: PipelineState, issues: list[QAIssue], passed: bool) -> None:
+    """Emit a single INFO summary for inspector results."""
+    errors = [issue for issue in issues if issue.severity == "error"]
+    warnings = [issue for issue in issues if issue.severity == "warning"]
+    error_categories = dict(Counter(issue.category for issue in errors))
+    warning_categories = dict(Counter(issue.category for issue in warnings))
+    logger.info(
+        "QA {} errors={} warnings={} error_categories={} warning_categories={}",
+        "passed" if passed else "failed",
+        len(errors),
+        len(warnings),
+        error_categories,
+        warning_categories,
+    )
+    if not passed and state.rollback_reasons:
+        preview = state.rollback_reasons[:3]
+        suffix = "..." if len(state.rollback_reasons) > 3 else ""
+        logger.info("QA rollback reasons ({}): {}{}", len(state.rollback_reasons), preview, suffix)
+
+
 async def run_inspector(state: PipelineState) -> PipelineState:
     """Validate compiled deck; populate qa_report and rollback_reasons on failure.
 
@@ -137,6 +158,7 @@ async def run_inspector(state: PipelineState) -> PipelineState:
     settings = get_settings()
     if not state.request.run_qa or not state.output_path:
         state.qa_report = QAReport(passed=True, reasons=["QA skipped"])
+        logger.info("QA skipped (run_qa=false or no output path)")
         return state
 
     pptx_path = Path(state.output_path)
@@ -152,6 +174,7 @@ async def run_inspector(state: PipelineState) -> PipelineState:
     try:
         images = await render_slides_to_images(pptx_path)
         slide_images = [str(p.resolve()) for p in images]
+        logger.info("QA rendered {} slide images for visual audit", len(images))
         vlm_enabled = settings.qa_vlm_enabled or state.request.allow_cloud
         visual_issues, _visual_reasons = await _audit_visual(
             images,
@@ -176,4 +199,6 @@ async def run_inspector(state: PipelineState) -> PipelineState:
     )
     if not passed:
         state.rollback_reasons = build_rollback_feedback(reasons)
+
+    _log_qa_summary(state, all_issues, passed)
     return state
