@@ -252,16 +252,18 @@ async def _prepare_source_context(
     source_context: str | None,
     brief: str,
     *,
+    digest_source_context: str | None = None,
     synthesis_model: str | None,
     allow_cloud: bool,
     settings: Settings,
 ) -> str | None:
     """Optionally digest raw source context into compact grounding text."""
-    if not source_context or not settings.enable_digest_phase:
+    digest_input = digest_source_context
+    if not digest_input or not settings.enable_digest_phase:
         return source_context
 
     digest = await digest_source_context(
-        source_context,
+        digest_input,
         brief,
         synthesis_model=synthesis_model,
         allow_cloud=allow_cloud,
@@ -347,6 +349,7 @@ async def synthesize_deck_spec(
     mode: GenerationMode = GenerationMode.TEMPLATE,
     title: str | None = None,
     source_context: str | None = None,
+    digest_source_context: str | None = None,
     synthesis_model: str | None = None,
     allow_cloud: bool = False,
     max_retries: int = 2,
@@ -359,6 +362,7 @@ async def synthesize_deck_spec(
         mode: Template or scratch generation.
         title: Optional deck title override.
         source_context: Optional PDF-derived text for factual grounding.
+        digest_source_context: Raw user source text to digest; digest is skipped when absent.
         synthesis_model: Optional synthesis model override (Ollama tag or Gemini id).
         allow_cloud: When True, Gemini may be used as fallback or when Ollama is unavailable.
         max_retries: Number of repair attempts on validation failure per provider.
@@ -370,6 +374,7 @@ async def synthesize_deck_spec(
     prepared_source = await _prepare_source_context(
         source_context,
         brief,
+        digest_source_context=digest_source_context,
         synthesis_model=synthesis_model,
         allow_cloud=allow_cloud,
         settings=settings,

@@ -39,9 +39,6 @@ async def run_researcher(state: PipelineState) -> PipelineState:
                 score=1.0,
             )
         )
-    elif not snippets:
-        retrieved = await retrieve_research_snippets(request.brief, settings=settings)
-        snippets.extend(retrieved.snippets)
 
     if settings.context7_enabled and settings.context7_api_key and is_it_topic(request.brief):
         tech_names = extract_technologies(request.brief, max_items=settings.context7_max_techs)

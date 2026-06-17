@@ -12,9 +12,17 @@ from presentations.core.schemas import GenerateRequest, GenerateResult, Generati
 from presentations.core.state import PipelineStage, PipelineState
 from presentations.ingest.theme_md3 import load_md3_theme
 from presentations.services.generation_context import resolve_generation_context
+from presentations.services.job_store import JobStatus, get_job_store
 
 
-async def generate_presentation(request: GenerateRequest) -> GenerateResult:
+async def _report_stage(job_id: str | None, stage: PipelineStage) -> None:
+    """Update job store with the current pipeline stage when tracking a job."""
+    if job_id is None:
+        return
+    await get_job_store().update(job_id, status=JobStatus.RUNNING, stage=stage)
+
+
+async def generate_presentation(request: GenerateRequest, *, job_id: str | None = None) -> GenerateResult:
     """Run the five-stage agent pipeline with optional QA rollback to Planner.
 
     Stages:
@@ -26,6 +34,7 @@ async def generate_presentation(request: GenerateRequest) -> GenerateResult:
 
     Args:
         request: Generation parameters.
+        job_id: Optional async job identifier for stage progress updates.
 
     Returns:
         GenerateResult with output path and QA report.
@@ -43,21 +52,26 @@ async def generate_presentation(request: GenerateRequest) -> GenerateResult:
         max_revisions=settings.max_revisions,
     )
 
+    await _report_stage(job_id, PipelineStage.RESEARCH)
     state = await run_researcher(state)
     state.stage = PipelineStage.PROFILE
+    await _report_stage(job_id, PipelineStage.PROFILE)
     state = await run_profiler(state)
 
     while state.revision <= state.max_revisions:
         state.stage = PipelineStage.PLAN
+        await _report_stage(job_id, PipelineStage.PLAN)
         state = await run_planner(state)
 
         state.stage = PipelineStage.ASSEMBLE
+        await _report_stage(job_id, PipelineStage.ASSEMBLE)
         state = await run_assembler(state)
 
         if not request.run_qa:
             break
 
         state.stage = PipelineStage.INSPECT
+        await _report_stage(job_id, PipelineStage.INSPECT)
         state = await run_inspector(state)
 
         if state.qa_report and state.qa_report.passed:

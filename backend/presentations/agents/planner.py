@@ -33,6 +33,7 @@ async def run_planner(state: PipelineState) -> PipelineState:
         mode=mode,
         title=request.title,
         source_context=source_context,
+        digest_source_context=request.source_context,
         synthesis_model=request.synthesis_model,
         allow_cloud=request.allow_cloud,
     )
