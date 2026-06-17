@@ -28,11 +28,44 @@ Returns hardware profile and recommended local models.
 
 | Field | Description |
 |-------|-------------|
+| `platform` | Host OS |
 | `active_profile` | `integrated` or `discrete` |
-| `synthesis_model` | Ollama model for deck JSON synthesis |
+| `synthesis_model` | Default Ollama model for deck JSON synthesis |
 | `vlm_model` | Vision model for QA |
 | `total_ram_gb` | Host RAM (Windows only) |
+| `integrated_vram_gb` | Integrated GPU VRAM estimate (Windows) |
+| `discrete_gpu_detected` | NVIDIA discrete GPU detected |
 | `supports_vlm` | Whether local VLM QA is expected to work |
+
+### GET /models
+
+Returns the synthesis model catalog with live availability probes.
+
+**Response**
+
+```json
+{
+  "default": "auto",
+  "models": [
+    {
+      "id": "qwen2.5:7b",
+      "label": "Qwen 2.5 7B (local)",
+      "provider": "ollama",
+      "recommended_for": "Technical decks, integrated GPUs, source-grounded content",
+      "speed": "medium",
+      "quality": "good",
+      "notes": "Default on integrated profile.",
+      "available": true
+    }
+  ]
+}
+```
+
+| `provider` | Availability check |
+|------------|-------------------|
+| `ollama` | Ollama `/api/tags` and model installed |
+| `vllm` | vLLM OpenAI `/v1/models` reachable |
+| `gemini` | `GOOGLE_CLOUD_PROJECT` configured |
 
 ---
 
@@ -98,15 +131,17 @@ Remove template from library and delete stored files.
 
 ### POST /discover-layout
 
-Parse a template file on the API host filesystem and return a layout profile.
+Parse a template file and return a layout profile.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `template_path` | string (query/body) | Absolute or relative path visible to the API process |
+| `template_path` | string (query) | Path **within `DATA_DIR`** visible to the API process |
+
+The resolved path must stay inside `DATA_DIR`; otherwise `400 Invalid path`.
 
 **Response:** `LayoutProfile` JSON with `layouts`, placeholder `ph_idx` indices, and optional `theme`.
 
-**Errors:** `404` if path does not exist.
+**Errors:** `404` if path does not exist; `400` if path escapes `DATA_DIR`.
 
 ---
 
@@ -114,7 +149,7 @@ Parse a template file on the API host filesystem and return a layout profile.
 
 ### POST /generate
 
-Run the full pipeline: LLM synthesis → compile → optional visual QA.
+Run the full five-stage pipeline: Researcher → Profiler → Planner → Assembler → optional Inspector with rollback.
 
 **Request body (JSON)**
 
@@ -125,10 +160,10 @@ Run the full pipeline: LLM synthesis → compile → optional visual QA.
 | `template_path` | string | null | Ad-hoc filesystem path (legacy) |
 | `mode` | `"scratch"` \| `"template"` | `"scratch"` | Compile path |
 | `title` | string | null | Deck title override |
-| `run_qa` | bool | `true` | Run visual QA loop after compile |
+| `run_qa` | bool | `true` | Run Inspector validation loop after compile |
 | `source_context` | string | null | Optional PDF-derived text for factual grounding (not the brief) |
 | `allow_cloud` | bool | `false` | When true, Gemini may be used for synthesis fallback and vision QA |
-| `synthesis_model` | string | null | Ollama tag or Gemini model id override |
+| `synthesis_model` | string | null | Catalog id: Ollama tag, vLLM id, or Gemini model id |
 
 **Example**
 
@@ -142,7 +177,9 @@ Content-Type: application/json
   "template_id": "abc123...",
   "mode": "scratch",
   "title": "EU Cloud Adoption 2026",
-  "run_qa": false
+  "run_qa": false,
+  "synthesis_model": "qwen2.5:7b",
+  "allow_cloud": false
 }
 ```
 
@@ -152,7 +189,7 @@ Content-Type: application/json
 |-------|-------------|
 | `output_path` | Path to generated `.pptx` on the API host |
 | `deck_spec` | Structured slide content used for compile |
-| `qa_report` | QA result when `run_qa=true` |
+| `qa_report` | Inspector result when `run_qa=true` |
 | `layout_profile` | Layout metadata used for synthesis |
 
 **Errors:** `400` for validation errors (missing template in template mode, synthesis failure, etc.).
@@ -160,6 +197,10 @@ Content-Type: application/json
 ### POST /generate/upload
 
 Multipart variant: same fields as `/generate` plus optional `template` file upload. Uploaded templates are auto-registered in the library.
+
+| Field | Default | Notes |
+|-------|---------|-------|
+| `run_qa` | `false` | Unlike JSON `/generate`, upload defaults QA off for faster UI uploads |
 
 ### POST /ingest/pdf
 
@@ -177,7 +218,7 @@ Extract Markdown from an uploaded PDF for use as `source_context` during generat
 }
 ```
 
-The `text` field is retained for backward compatibility.
+The `text` field is retained for backward compatibility. Extraction uses the PDF Toolbox MCP when configured; see [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md).
 
 ---
 
@@ -185,23 +226,25 @@ The `text` field is retained for backward compatibility.
 
 ### POST /qa/render
 
-Run visual QA on an existing `.pptx` on the API host.
+Run visual QA on an existing `.pptx` within `DATA_DIR/output/`.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `pptx_path` | string | Path to presentation file |
+| `pptx_path` | string | Path to presentation file under `output/` |
 
-**Errors:** `404` file not found; `503` if LibreOffice/poppler unavailable.
+**Errors:** `400` invalid path; `404` file not found; `503` if LibreOffice/poppler unavailable.
 
 ### GET /download/{filename}
 
-Download a generated deck from `DATA_DIR/output/`.
+Download a generated deck from `DATA_DIR/output/`. Filename must not contain `/`, `\`, or `..`.
 
 ### GET /qa/slides/{deck_stem}/{image_name}
 
 Serve a JPEG slide image from the QA render cache. Used by the React UI for previews.
 
 Example: `/qa/slides/My_Deck_abc123/slide-01.jpg`
+
+Path segments must not contain `..`.
 
 ---
 
@@ -217,6 +260,6 @@ See [MCP_INTEGRATION.md](MCP_INTEGRATION.md).
 
 | Code | Typical cause |
 |------|----------------|
-| `400` | Invalid request, unsupported template, synthesis/compile error |
+| `400` | Invalid request, path traversal, unsupported template, synthesis/compile error |
 | `404` | Template, file, or slide image not found |
 | `503` | QA rendering dependencies missing (`soffice`, `pdftoppm`) |

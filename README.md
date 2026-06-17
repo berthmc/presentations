@@ -4,12 +4,14 @@ Local-first LLM-powered PowerPoint generation with Material Design 3 styling, te
 
 ## Features
 
+- **Five-stage agent pipeline**: Researcher (RAG + Context7) → Profiler → Planner → Assembler → Inspector with rollback
 - **Template-driven generation** via `python-pptx` (corporate `.pptx` themes preserved)
 - **From-scratch generation** via `pptxgenjs` with MD3 tokens
 - **Persistent template library** with `template_id` across sessions
 - **Markdown templates** (`.md`) with layout placeholders
-- **Local Ollama** synthesis with **Gemini/Vertex** cloud fallback
-- **Visual QA loop**: LibreOffice → PDF → JPEG → VLM + geometric checks
+- **Local stack**: Ollama synthesis, optional vLLM planner, Qdrant RAG, LibreOffice visual QA
+- **Gemini/Vertex** cloud fallback when `allow_cloud` is enabled
+- **Visual QA loop**: content checks, geometric audit, optional VLM
 - **Surfaces**: React + Vite MD3 web UI, FastAPI REST, **MCP server** for Cursor and Antigravity
 
 ## Documentation
@@ -29,7 +31,7 @@ Full docs: **[documentation/README.md](documentation/README.md)**
 ```powershell
 Copy-Item .env.example .env
 pip install -e ".[dev]"
-cd src/presentations/compile/node; npm install; cd ../../../..
+cd backend/presentations/compile/node; npm install; cd ../../../..
 cd frontend; npm install; cd ..
 
 # Terminal 1 — API
@@ -42,11 +44,14 @@ cd frontend; npm run dev    # http://localhost:8091
 ### Docker
 
 ```powershell
-docker compose -f presentations/docker-compose.yml up --build
+docker compose -f docker/docker-compose.yml up --build
+# Optional GPU planner:
+docker compose -f docker/docker-compose.yml --profile gpu up --build
 ```
 
 - API: http://localhost:8090 (OpenAPI at `/docs`)
 - UI: http://localhost:8091
+- Qdrant: http://localhost:6333 (RAG)
 
 ## MCP (Cursor + Antigravity)
 
@@ -73,7 +78,7 @@ Self-hosted first-party MCP server — see [documentation/MCP_INTEGRATION.md](do
 
 ```powershell
 pytest
-ruff check src tests scripts
+ruff check backend tests scripts
 ```
 
 ## Repository

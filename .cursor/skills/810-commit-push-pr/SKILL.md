@@ -28,7 +28,7 @@ Ask the user if they want lint/tests before committing.
 
 ```powershell
 # Lint (host venv)
-ruff check src/ tests/
+ruff check backend/ tests/
 
 # Tests inside Docker (preferred)
 sudo docker compose exec backend python -m pytest tests/ -v --tb=short

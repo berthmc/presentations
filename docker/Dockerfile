@@ -21,20 +21,20 @@ RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - \
 WORKDIR /app
 
 COPY pyproject.toml README.md ./
-COPY src ./src
+COPY backend ./backend
 COPY scripts ./scripts
-COPY src/presentations/compile/node/package.json ./src/presentations/compile/node/package.json
-COPY src/presentations/compile/node/builder.mjs ./src/presentations/compile/node/builder.mjs
+COPY backend/presentations/compile/node/package.json ./backend/presentations/compile/node/package.json
+COPY backend/presentations/compile/node/builder.mjs ./backend/presentations/compile/node/builder.mjs
 
 RUN pip install --upgrade pip \
     && pip install ".[dev]" \
-    && cd src/presentations/compile/node && npm install --omit=dev
+    && cd backend/presentations/compile/node && npm install --omit=dev
 
 RUN mkdir -p /data/staging /data/output /data/templates /data/uploads /data/qa
 
 EXPOSE 8090 8091
 
-COPY presentations/entrypoint.sh /entrypoint.sh
+COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

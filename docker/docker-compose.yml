@@ -4,7 +4,7 @@ services:
   pptx-api:
     build:
       context: ..
-      dockerfile: presentations/Dockerfile
+      dockerfile: docker/Dockerfile
     command: api
     ports:
       - "8090:8090"
@@ -35,7 +35,7 @@ services:
   pptx-ui:
     build:
       context: ..
-      dockerfile: presentations/Dockerfile.ui
+      dockerfile: docker/Dockerfile.ui
     ports:
       - "8091:8091"
     depends_on:

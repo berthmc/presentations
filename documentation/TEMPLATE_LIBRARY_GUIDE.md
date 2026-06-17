@@ -83,7 +83,7 @@ See [`templates/sample-deck.md`](../templates/sample-deck.md).
 
 ## What the LLM receives
 
-The synthesis step receives the **cached layout profile JSON** (indices and placeholder names), not a markdown conversion of a `.pptx`. Optional markitdown/thumbnail analysis (per Anthropic skill docs) can supplement layout choice but does not replace the template file at compile time.
+The synthesis step receives the **cached layout profile JSON** (indices and placeholder names), not a markdown conversion of a `.pptx`. The five-stage pipeline may also ground content via RAG snippets, digest facts, and Context7 documentation before Planner synthesis.
 
 ## Manage templates
 

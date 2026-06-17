@@ -41,7 +41,7 @@ pptx-mcp = "presentations.mcp.server:main"
 pptx-api = "presentations.api.app:main"
 
 [tool.poetry]
-packages = [{ include = "presentations", from = "src" }]
+packages = [{ include = "presentations", from = "backend" }]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

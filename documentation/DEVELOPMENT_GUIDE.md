@@ -20,7 +20,7 @@ Copy-Item .env.example .env
 
 # 2. Python backend
 pip install -e ".[dev]"
-cd src/presentations/compile/node; npm install; cd ../../../..
+cd backend/presentations/compile/node; npm install; cd ../../../..
 
 # 3. React UI
 cd frontend; npm install; cd ..
@@ -42,7 +42,13 @@ ollama pull qwen2.5vl:7b   # VLM QA (slide visual audit)
 ## Docker
 
 ```powershell
-docker compose -f presentations/docker-compose.yml up --build
+docker compose -f docker/docker-compose.yml up --build
+```
+
+With NVIDIA GPU for vLLM planner (optional):
+
+```powershell
+docker compose -f docker/docker-compose.yml --profile gpu up --build
 ```
 
 If you still have containers from the old **`docker`** project (before the folder rename), tear them down by project name — the old compose path no longer exists:
@@ -55,14 +61,17 @@ docker compose -p docker down -v
 |-----|---------|
 | http://localhost:8090 | API + MCP at `/mcp` |
 | http://localhost:8091 | React UI (nginx, `/api` proxy) |
+| http://localhost:6333 | Qdrant (RAG vector store) |
+| http://localhost:8000 | vLLM OpenAI API (`--profile gpu` only) |
 
-Data persists in Docker volume `presentations_pptx-data` at `/data`.
+Data persists in Docker volume `presentations_pptx-data` at `/data`. Qdrant uses `presentations_qdrant-data`.
 
 ### Container commands
 
 ```powershell
-docker compose -f presentations/docker-compose.yml logs -f pptx-api
-docker compose -f presentations/docker-compose.yml exec pptx-api pptx-mcp --transport stdio
+docker compose -f docker/docker-compose.yml logs -f pptx-api
+docker compose -f docker/docker-compose.yml exec pptx-api pptx-mcp --transport stdio
+docker compose -f docker/docker-compose.yml ps qdrant
 ```
 
 ## Environment variables
@@ -90,8 +99,26 @@ Copy from [`.env.example`](../.env.example). Key settings:
 | `CONTEXT7_MAX_TECHS` | `3` | Max Context7 library lookups per generation |
 | `ENABLE_DIGEST_PHASE` | `true` | Run source digest before deck synthesis |
 | `DIGEST_CHUNK_CHARS` | `8000` | Chunk size for digesting long source documents |
+| `OLLAMA_READ_TIMEOUT_GENERATE` | `300` | Ollama read timeout (seconds) for synthesis |
+| `OLLAMA_READ_TIMEOUT_VLM` | `300` | Ollama read timeout (seconds) for VLM QA |
+| `VLLM_BASE_URL` | `http://localhost:8000/v1` | vLLM OpenAI-compatible API |
+| `VLLM_MODEL` | `Qwen/Qwen2.5-Coder-14B-Instruct-AWQ` | Model served by vLLM |
+| `VLLM_ENABLED` | `true` | Route planner to vLLM when catalog id selected |
+| `VLLM_MAX_MODEL_LEN` | `16384` | vLLM context length hint |
+| `VLLM_READ_TIMEOUT` | `300` | vLLM read timeout (seconds) |
+| `QDRANT_URL` | `http://localhost:6333` | Qdrant HTTP API |
+| `QDRANT_COLLECTION` | `pptx_research` | Collection name for RAG chunks |
+| `EMBEDDING_MODEL` | `bge-m3` | Ollama embedding model for RAG |
+| `RAG_ENABLED` | `true` | Index `source_context` and retrieve snippets |
+| `RAG_TOP_K` | `10` | Retrieved snippet count |
+| `RAG_CHUNK_CHARS` | `1500` | Chunk size for RAG indexing |
+| `USE_DOCLING` | `true` | Prefer Docling for document parsing when `[rag]` installed |
+| `MAX_REVISIONS` | `3` | Inspector → Planner rollback limit |
+| `QA_VLM_ENABLED` | `false` | Force local/cloud VLM audit without `allow_cloud` |
 
-PDF source document ingestion requires the [PDF Toolbox](https://github.com/berthmc/pdf) MCP service on port 3005. Upload a PDF in the UI (or call `POST /ingest/pdf`), then generate with both a **brief** (presentation intent) and optional **`source_context`** (extracted PDF text for factual grounding). In Docker, `presentations/docker-compose.yml` bind-mounts `../../pdf/mcp-workspace` (sibling repo) to `/pdf-mcp-workspace` so staged PDFs are visible to the PDF MCP container.
+Optional RAG parsing extra: `pip install -e ".[rag]"` (Docling).
+
+PDF source document ingestion requires the [PDF Toolbox](https://github.com/berthmc/pdf) MCP service on port 3005. Upload a PDF in the UI (or call `POST /ingest/pdf`), then generate with both a **brief** (presentation intent) and optional **`source_context`** (extracted PDF text for factual grounding). In Docker, `docker/docker-compose.yml` bind-mounts `../../pdf/mcp-workspace` (sibling repo) to `/pdf-mcp-workspace` so staged PDFs are visible to the PDF MCP container.
 
 Frontend (Vite): see [`frontend/.env.example`](../frontend/.env.example). Default dev setup uses `/api` proxy — no env file required.
 
@@ -99,7 +126,7 @@ Frontend (Vite): see [`frontend/.env.example`](../frontend/.env.example). Defaul
 
 ```powershell
 pytest
-ruff check src tests scripts
+ruff check backend tests scripts
 cd frontend; npm run build
 ```
 
@@ -120,9 +147,10 @@ cd frontend; npm run build
 
 ```
 pptx/
+  backend/               Python package root (`presentations` package)
+    presentations/       API, MCP, agents, compile, LLM, QA, RAG
   frontend/              React + Vite UI
-  src/presentations/     Python package
-  presentations/         Dockerfile, compose, nginx
+  docker/                Dockerfile, compose, nginx
   documentation/         Project docs (this folder)
   documentation/briefs/  Original specs & Anthropic skill refs
   scripts/office/        PPTX unpack/pack utilities
@@ -142,7 +170,7 @@ Invoke-RestMethod http://localhost:8090/diagnostics
 ### API starts but generation fails
 
 - Confirm Ollama is running: `ollama list`
-- Check logs: `docker compose -f presentations/docker-compose.yml logs pptx-api`
+- Check logs: `docker compose -f docker/docker-compose.yml logs pptx-api`
 - By default, generation uses **local Ollama only**. Enable **Allow Gemini (cloud AI)** in the UI to permit Vertex AI fallback when Ollama fails or is unavailable.
 - Set `GOOGLE_CLOUD_PROJECT` and credentials when using cloud AI.
 - In Docker with a discrete GPU host, set `HARDWARE_PROFILE=discrete` in `.env` to enable VLM QA with `qwen2.5vl:7b` (synthesis defaults to `qwen2.5:7b` on both profiles)
@@ -153,6 +181,14 @@ Invoke-RestMethod http://localhost:8090/diagnostics
 - Install LibreOffice (`soffice`) and poppler (`pdftoppm`)
 - In Docker, these are included in `pptx-api` image
 - QA failure returns `503` on `/qa/render`; generation with `run_qa=false` still works
+- VLM audit requires `QA_VLM_ENABLED=true` or `allow_cloud=true` on the request
+
+### RAG or vLLM connection errors
+
+- Start Qdrant: included in `docker compose` or `docker compose up qdrant`
+- Start vLLM: `docker compose --profile gpu up vllm` or a host vLLM on `:8000`
+- Disable RAG temporarily: `RAG_ENABLED=false`
+- Disable vLLM planner: `VLLM_ENABLED=false` and select an Ollama model in the UI
 
 ### React UI cannot reach API
 
@@ -163,7 +199,7 @@ Invoke-RestMethod http://localhost:8090/diagnostics
 ### pptxgenjs compile fails
 
 ```powershell
-cd src/presentations/compile/node; npm install
+cd backend/presentations/compile/node; npm install
 node builder.mjs   # expects JSON on stdin
 ```
 

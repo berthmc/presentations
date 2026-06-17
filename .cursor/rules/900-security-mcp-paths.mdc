@@ -15,8 +15,8 @@ When calling **`scan_python_security`**, **`check_code_quality`**, **`scan_infra
 
    | Host path | Pass to MCP (`file_path` or `target_path`) |
    |-----------|---------------------------------------------|
-   | `C:\dev\pptx\src\presentations\...` | `/project/pptx/src/presentations/...` |
-   | Python package tree | `/project/pptx/src/presentations` |
+   | `C:\dev\pptx\backend\presentations\...` | `/project/pptx/backend/presentations/...` |
+   | Python package tree | `/project/pptx/backend/presentations` |
    | Tests | `/project/pptx/tests` |
    | Repo root (infra/secrets) | `/project/pptx` |
 
@@ -26,7 +26,7 @@ When calling **`scan_python_security`**, **`check_code_quality`**, **`scan_infra
 
 5. **If unsure which repos are mounted**, call MCP tool **`list_project_mount_entries`** (no arguments). Expect `pptx` in the directory list. Build paths as `/project/<repo-name>/...`.
 
-6. **Common mistake:** passing `/project/src/presentations` — that path does **not** exist under multi-project mount. Use **`/project/pptx/src/presentations`**.
+6. **Common mistake:** passing `/project/src/presentations` — that path does **not** exist under multi-project mount. Use **`/project/pptx/backend/presentations`**.
 
 7. **Do not** scan `/project` root (policy limits; mixes repos). Target one repo subtree.
 
