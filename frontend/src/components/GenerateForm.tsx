@@ -304,7 +304,6 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
         id="key-points"
         label="Key points"
         multiline
-        className="textarea-sm"
         value={keyPoints}
         onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setKeyPoints(event.target.value)}
       />

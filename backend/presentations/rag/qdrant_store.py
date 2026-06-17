@@ -75,11 +75,12 @@ def search(
         query_filter = Filter(must=[FieldCondition(key="doc_id", match=MatchValue(value=doc_id))])
 
     try:
-        results = client.search(
+        response = client.query_points(
             collection_name=settings.qdrant_collection,
-            query_vector=query_vector,
+            query=query_vector,
             limit=top_k,
             query_filter=query_filter,
+            with_payload=True,
         )
     except Exception as exc:
         logger.warning("Qdrant search failed: {}", exc)
@@ -92,7 +93,8 @@ def search(
             "score": hit.score,
             "chunk_index": hit.payload.get("chunk_index", 0),
         }
-        for hit in results
+        for hit in response.points
+        if hit.payload is not None
     ]
 
 
