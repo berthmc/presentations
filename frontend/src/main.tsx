@@ -79,7 +79,8 @@ function App() {
             id={`tab-${tab.id}`}
             onClick={() => setActiveTab(tab.id)}
           >
-            {tab.label}
+            <span className="material-symbols-rounded nav-tab__icon">{tab.icon}</span>
+            <span className="nav-tab__text">{tab.label}</span>
           </button>
         ))}
       </nav>

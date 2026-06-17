@@ -117,11 +117,15 @@ export function TemplateLibrary({ selectedId, onSelect, onModeHint }: Props) {
     }
   }
 
-  function handleChipSelect(template: TemplateSummary) {
+  function handleCardSelect(template: TemplateSummary) {
     onSelect(template.id);
     if (template.source_type === "pptx") {
       onModeHint("template");
     }
+  }
+
+  function templateIcon(sourceType: string): string {
+    return sourceType === "pptx" ? "slideshow" : "description";
   }
 
   return (
@@ -135,7 +139,7 @@ export function TemplateLibrary({ selectedId, onSelect, onModeHint }: Props) {
         Select a saved template or upload a new .pptx / .md layout.
       </p>
 
-      <div className="chip-row" role="listbox" aria-label="Saved templates">
+      <div className="template-card-list" role="listbox" aria-label="Saved templates">
         {templates.length === 0 && (
           <span className="chip chip--assist">No templates yet</span>
         )}
@@ -145,14 +149,19 @@ export function TemplateLibrary({ selectedId, onSelect, onModeHint }: Props) {
             type="button"
             role="option"
             aria-selected={selectedId === template.id}
-            className={`chip${selectedId === template.id ? " chip--selected" : ""}`}
-            onClick={() => handleChipSelect(template)}
+            className={`template-card${selectedId === template.id ? " template-card--selected" : ""}`}
+            onClick={() => handleCardSelect(template)}
           >
-            {template.name}
-            <span className="signal-tile__badge signal-tile__badge--neutral">
-              {template.source_type}
+            <span className="material-symbols-rounded template-card__icon">
+              {templateIcon(template.source_type)}
             </span>
-            {template.is_default && " · default"}
+            <span className="template-card__body">
+              <span className="template-card__title">{template.name}</span>
+              <span className="template-card__meta">
+                {template.source_type}
+                {template.is_default && " · default"}
+              </span>
+            </span>
           </button>
         ))}
       </div>
