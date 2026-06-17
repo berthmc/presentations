@@ -678,6 +678,8 @@ button.extended-fab:hover {
 
 .text-field {
   position: relative;
+  display: block;
+  width: 100%;
   margin-bottom: 1rem;
 }
 
@@ -727,9 +729,13 @@ button.extended-fab:hover {
 }
 
 .text-field textarea.text-field__input {
+  display: block;
+  width: 100%;
+  min-width: 100%;
   min-height: 7.5rem;
   resize: vertical;
   padding-top: 1.5rem;
+  box-sizing: border-box;
 }
 
 .text-field textarea.text-field__input.textarea-md {
