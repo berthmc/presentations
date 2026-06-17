@@ -9,6 +9,7 @@ from loguru import logger
 from pydantic import ValidationError
 
 from presentations.config.settings import Settings, get_settings
+from presentations.core.layout_roles import classify_layout_role, enforce_structural_layouts
 from presentations.core.schemas import (
     DeckSpec,
     DigestEntry,
@@ -86,6 +87,12 @@ Rules:
 - ph_idx values are often non-sequential (for example 0, 10, 11). Never invent placeholder indices.
 - For each slide, only use ph_idx values listed under allowed_ph_idx for that layout_index.
 - Vary layouts across slides; avoid repeating the same layout for every slide.
+- Slide 1 must use a layout with role "title" (title slide).
+- Insert at least one layout with role "section" between major topic groups when available.
+- Use a layout with role "two-content" for comparisons or paired concepts when available.
+- The final slide should use a layout with role "closing" or "section" when available.
+- Prefer layouts whose role matches the slide content (title, section, two-content, content, closing).
+- Do not use markdown formatting in content strings; write plain text only (no ** or * markers).
 - Keep bullet points concise but substantive; use \\n for line breaks within a placeholder.
 - When the brief includes "Target length: N slides", produce approximately N slides.
 - Return JSON matching the required schema with title and slides fields.
@@ -112,8 +119,9 @@ def _compact_layout(layout: LayoutProfile) -> dict[str, Any]:
             {
                 "layout_index": idx,
                 "name": entry.name,
+                "role": classify_layout_role(entry),
                 "allowed_ph_idx": [ph.index for ph in entry.placeholders],
-                "placeholders": [{"ph_idx": ph.index, "name": ph.name} for ph in entry.placeholders],
+                "placeholders": [{"ph_idx": ph.index, "name": ph.name, "type": ph.type} for ph in entry.placeholders],
             }
             for idx, entry in sorted(layout.layouts.items())
         ]
@@ -294,6 +302,7 @@ def _payload_to_deck(
     deck = DeckSpec.model_validate(payload)
     if layout and mode == GenerationMode.TEMPLATE:
         validate_deck_against_layout(deck, layout)
+        deck = enforce_structural_layouts(deck, layout)
     return deck
 
 

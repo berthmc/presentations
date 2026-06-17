@@ -13,7 +13,9 @@ from presentations.agents.skill_rules import (
     normalize_content_lines,
 )
 from presentations.compile.pptxgen_runner import compile_from_scratch
+from presentations.compile.theme_palette import build_theme_palette
 from presentations.config.pipeline_logging import summarize_deck_spec, summarize_pptx_file
+from presentations.core.layout_roles import classify_layout_role
 from presentations.core.schemas import GenerationMode
 from presentations.core.state import PipelineState
 from presentations.llm.layout_validate import sanitize_deck_spec
@@ -49,6 +51,7 @@ def compile_from_template(
             logger.info("Sanitized deck spec: {} slides after layout clamping", len(deck_spec.slides))
 
     prs = Presentation(str(template))
+    theme_palette = build_theme_palette(prs)
     slide_ids = list(prs.slides._sldIdLst)  # noqa: SLF001
     for slide_id in slide_ids:
         r_id = slide_id.rId
@@ -60,10 +63,17 @@ def compile_from_template(
         slide = prs.slides.add_slide(layout)
         filled_ph: set[int] = set()
         content_chars = sum(len(mapping.content) for mapping in slide_spec.mappings)
+        accent = theme_palette.accent_for_slide(slide_num)
+        layout_role = "content"
+        if layout_profile and slide_spec.layout_index in layout_profile.layouts:
+            layout_role = classify_layout_role(layout_profile.layouts[slide_spec.layout_index])
+        is_section_layout = layout_role == "section"
         logger.debug(
-            "Slide {} layout_index={} mappings={} content_chars={}",
+            "Slide {} layout_index={} role={} accent={} mappings={} content_chars={}",
             slide_num,
             slide_spec.layout_index,
+            layout_role,
+            accent.name,
             len(slide_spec.mappings),
             content_chars,
         )
@@ -81,6 +91,8 @@ def compile_from_template(
                 placeholder,
                 mapping.content,
                 is_title=_is_title_placeholder(ph_name),
+                accent=accent,
+                tint_title_accent=is_section_layout and _is_title_placeholder(ph_name),
             )
             filled_ph.add(mapping.ph_idx)
 

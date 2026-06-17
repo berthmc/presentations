@@ -2,6 +2,7 @@
 
 from loguru import logger
 
+from presentations.core.layout_roles import enforce_structural_layouts
 from presentations.core.schemas import DeckSpec, LayoutProfile, PlaceholderMapping, SlideSpec
 
 
@@ -97,4 +98,5 @@ def sanitize_deck_spec(deck: DeckSpec, layout: LayoutProfile) -> DeckSpec:
             SlideSpec(layout_index=layout_index, mappings=kept, notes=slide.notes)
         )
 
-    return deck.model_copy(update={"slides": sanitized_slides})
+    sanitized = deck.model_copy(update={"slides": sanitized_slides})
+    return enforce_structural_layouts(sanitized, layout)

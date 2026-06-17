@@ -7,10 +7,11 @@ Sources:
 """
 
 import re
+from dataclasses import dataclass
 from typing import Any
 
+from pptx.enum.dml import MSO_THEME_COLOR
 from pptx.enum.text import PP_ALIGN
-from pptx.util import Pt
 
 # --- Content patterns (SKILL.md + editing.md) ---
 
@@ -19,6 +20,9 @@ LEFTOVER_PLACEHOLDER_PATTERN = re.compile(
     re.IGNORECASE,
 )
 UNICODE_BULLET_PATTERN = re.compile(r"^[\u2022\u2023\u2043\u2219\u25CF\u25E6\u2024\-]\s*")
+LEADING_MARKDOWN_PATTERN = re.compile(r"^(#+\s+|-\s+|\*\s+|\d+\.\s+)")
+INLINE_MARKDOWN_PATTERN = re.compile(r"\*\*(.+?)\*\*|\*(.+?)\*")
+LEADIN_LABEL_PATTERN = re.compile(r"^([^:]{1,40}):\s*(.+)$")
 SMART_QUOTE_MAP = {
     "\u201c": "&#x201C;",
     "\u201d": "&#x201D;",
@@ -50,17 +54,110 @@ Return strict JSON: {"passed": boolean, "reasons": ["..."]}
 """
 
 
+@dataclass(frozen=True)
+class TextSegment:
+    """One inline text segment with optional emphasis."""
+
+    text: str
+    bold: bool = False
+    italic: bool = False
+    accent: bool = False
+
+
+def strip_leading_markdown(line: str) -> str:
+    """Remove leading markdown bullets, numbering, or heading markers."""
+    cleaned = UNICODE_BULLET_PATTERN.sub("", line.strip())
+    return LEADING_MARKDOWN_PATTERN.sub("", cleaned).strip()
+
+
 def normalize_content_lines(content: str) -> list[str]:
     """Split content into lines, stripping unicode bullets per editing.md."""
     lines: list[str] = []
     for raw in content.split("\n"):
-        line = UNICODE_BULLET_PATTERN.sub("", raw.strip())
+        line = strip_leading_markdown(raw)
         if line:
             lines.append(line)
     return lines
 
 
-def fill_placeholder_with_rules(placeholder, content: str, *, is_title: bool = False) -> None:
+def parse_inline_markdown(line: str) -> list[TextSegment]:
+    """Parse inline **bold** and *italic* markers into text segments."""
+    if "**" not in line and line.count("*") < 2:
+        lead_in = _parse_leadin_label(line)
+        if lead_in is not None:
+            return lead_in
+
+    segments: list[TextSegment] = []
+    cursor = 0
+    for match in INLINE_MARKDOWN_PATTERN.finditer(line):
+        if match.start() > cursor:
+            segments.append(TextSegment(text=line[cursor : match.start()]))
+
+        if match.group(1) is not None:
+            segments.append(TextSegment(text=match.group(1), bold=True, accent=True))
+        elif match.group(2) is not None:
+            segments.append(TextSegment(text=match.group(2), italic=True))
+
+        cursor = match.end()
+
+    if cursor < len(line):
+        segments.append(TextSegment(text=line[cursor:]))
+
+    if not segments:
+        return [TextSegment(text=line)]
+    return [segment for segment in segments if segment.text]
+
+
+def _parse_leadin_label(line: str) -> list[TextSegment] | None:
+    """Split ``Label: body`` lines into bold label + normal body segments."""
+    match = LEADIN_LABEL_PATTERN.match(line)
+    if match is None:
+        return None
+    return [
+        TextSegment(text=f"{match.group(1)}:", bold=True, accent=True),
+        TextSegment(text=match.group(2)),
+    ]
+
+
+def _apply_accent_to_run(run, accent: MSO_THEME_COLOR | None) -> None:
+    """Apply a theme accent colour when supported by python-pptx."""
+    if accent is None:
+        return
+    try:
+        run.font.color.theme_color = accent
+    except AttributeError:
+        return
+
+
+def _add_segments_to_paragraph(
+    paragraph,
+    segments: list[TextSegment],
+    *,
+    is_title: bool,
+    accent: MSO_THEME_COLOR | None,
+    tint_title_accent: bool,
+) -> None:
+    """Add parsed inline segments to a paragraph as separate runs."""
+    for segment in segments:
+        run = paragraph.add_run()
+        run.text = segment.text
+        run.font.bold = is_title or segment.bold
+        run.font.italic = segment.italic
+
+        if is_title and tint_title_accent and accent is not None:
+            _apply_accent_to_run(run, accent)
+        elif segment.accent and accent is not None:
+            _apply_accent_to_run(run, accent)
+
+
+def fill_placeholder_with_rules(
+    placeholder,
+    content: str,
+    *,
+    is_title: bool = False,
+    accent: MSO_THEME_COLOR | None = None,
+    tint_title_accent: bool = False,
+) -> None:
     """Fill a python-pptx placeholder applying editing.md formatting rules."""
     lines = normalize_content_lines(content)
     if not lines:
@@ -72,13 +169,35 @@ def fill_placeholder_with_rules(placeholder, content: str, *, is_title: bool = F
 
     for index, line in enumerate(lines):
         paragraph = text_frame.paragraphs[0] if index == 0 else text_frame.add_paragraph()
-        run = paragraph.add_run()
-        run.text = line
-        run.font.bold = is_title or (index == 0 and len(lines) > 1)
-        if is_title:
-            run.font.size = Pt(36)
         paragraph.level = 0
         paragraph.alignment = PP_ALIGN.LEFT
+
+        if is_title and "**" not in line and "*" not in line:
+            run = paragraph.add_run()
+            run.text = line
+            run.font.bold = True
+            if tint_title_accent and accent is not None:
+                _apply_accent_to_run(run, accent)
+            continue
+
+        segments = parse_inline_markdown(line)
+        if len(segments) == 1 and not segments[0].bold and not segments[0].italic:
+            run = paragraph.add_run()
+            run.text = segments[0].text
+            run.font.bold = is_title or (index == 0 and len(lines) > 1 and ":" in line)
+            if run.font.bold and accent is not None and not is_title:
+                _apply_accent_to_run(run, accent)
+            elif is_title and tint_title_accent and accent is not None:
+                _apply_accent_to_run(run, accent)
+            continue
+
+        _add_segments_to_paragraph(
+            paragraph,
+            segments,
+            is_title=is_title,
+            accent=accent,
+            tint_title_accent=tint_title_accent,
+        )
 
 
 def estimate_text_overflow(

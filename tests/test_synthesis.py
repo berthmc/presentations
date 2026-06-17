@@ -3,9 +3,8 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from presentations.core.schemas import DeckSpec, GenerationMode, LayoutEntry, LayoutProfile, PlaceholderInfo
-from presentations.llm.synthesis import _build_user_prompt, synthesize_deck_spec
+from presentations.llm.synthesis import _build_user_prompt, _compact_layout, synthesize_deck_spec
 
 
 def test_build_user_prompt_includes_source_context() -> None:
@@ -85,8 +84,41 @@ def test_build_user_prompt_uses_compact_layout() -> None:
     prompt = _build_user_prompt("Brief text", layout, GenerationMode.TEMPLATE)
     assert '"allowed_ph_idx"' in prompt
     assert '"ph_idx": 0' in prompt
+    assert '"role"' in prompt
     assert "source_path" not in prompt
     assert "theme" not in prompt
+
+
+def test_compact_layout_emits_role_hints() -> None:
+    layout = LayoutProfile(
+        source_path="/tmp/template.pptx",
+        layouts={
+            0: LayoutEntry(
+                name="cover page option 1",
+                placeholders=[
+                    PlaceholderInfo(index=0, name="title", type="TITLE"),
+                    PlaceholderInfo(index=1, name="subtitle", type="BODY"),
+                ],
+            ),
+            2: LayoutEntry(
+                name="Chapter page option 1",
+                placeholders=[PlaceholderInfo(index=0, name="title", type="TITLE")],
+            ),
+            10: LayoutEntry(
+                name="Two Content",
+                placeholders=[
+                    PlaceholderInfo(index=0, name="title", type="TITLE"),
+                    PlaceholderInfo(index=1, name="left", type="BODY"),
+                    PlaceholderInfo(index=2, name="right", type="BODY"),
+                ],
+            ),
+        },
+    )
+    compact = _compact_layout(layout)
+    roles = {entry["layout_index"]: entry["role"] for entry in compact["layouts"]}
+    assert roles[0] == "title"
+    assert roles[2] == "section"
+    assert roles[10] == "two-content"
 
 
 @pytest.mark.asyncio
