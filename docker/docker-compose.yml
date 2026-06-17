@@ -1,0 +1,83 @@
+name: presentations
+
+services:
+  pptx-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: api
+    ports:
+      - "8090:8090"
+    env_file:
+      - ../.env
+    environment:
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - MCP_TRANSPORT=http
+      - DATA_DIR=/data
+      - PDF_MCP_URL=http://host.docker.internal:3005/mcp
+      - PDF_MCP_WORKSPACE_DIR=/pdf-mcp-workspace
+      - VLLM_BASE_URL=http://host.docker.internal:8000/v1
+      - QDRANT_URL=http://host.docker.internal:6333
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/vertexai_sa.json
+    volumes:
+      - pptx-data:/data
+      - ../documentation:/app/documentation:ro
+      - ../credentials:/app/credentials:ro
+      - ../../pdf/mcp-workspace:/pdf-mcp-workspace
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  pptx-ui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ui
+    ports:
+      - "8091:8091"
+    depends_on:
+      pptx-api:
+        condition: service_healthy
+
+  qdrant:
+    image: qdrant/qdrant:v1.13.2
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  vllm:
+    image: vllm/vllm-openai:v0.8.5
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: >
+      --model Qwen/Qwen2.5-Coder-14B-Instruct-AWQ
+      --quantization awq
+      --max-model-len 16384
+      --gpu-memory-utilization 0.90
+      --host 0.0.0.0
+      --port 8000
+    volumes:
+      - vllm-cache:/root/.cache/huggingface
+    profiles:
+      - gpu
+
+volumes:
+  pptx-data:
+  qdrant-data:
+  vllm-cache:

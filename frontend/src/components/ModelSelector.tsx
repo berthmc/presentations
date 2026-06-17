@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { getModels } from "../api/client";
 import type { ModelOption } from "../types";
+import { TextField } from "./TextField";
 
 interface Props {
   value: string;
@@ -36,33 +37,43 @@ export function ModelSelector({ value, onChange, allowCloud }: Props) {
 
   const selectedModel = value === "auto" ? null : models.find((model) => model.id === value) ?? null;
   const geminiSelected = selectedModel ? isGeminiModel(selectedModel) : false;
+  const advisory = formatAdvisory(selectedModel, allowCloud);
 
   return (
-    <div className="field">
-      <label htmlFor="synthesis-model">Synthesis model</label>
-      <select id="synthesis-model" value={value} onChange={(event) => onChange(event.target.value)}>
-        <option value="auto">Auto (recommended)</option>
-        {models.map((model) => {
-          const cloudBlocked = isGeminiModel(model) && !allowCloud && !geminiSelected;
-          return (
-            <option
-              key={model.id}
-              value={model.id}
-              disabled={!model.available || cloudBlocked}
-              title={cloudBlocked ? "Enable cloud AI below to use Gemini models" : undefined}
-            >
-              {model.label}
-              {!model.available ? " (not available)" : ""}
-              {cloudBlocked ? " (enable cloud AI)" : ""}
-            </option>
-          );
-        })}
-      </select>
-      {error && <p className="field-help error">Model catalog unavailable: {error}</p>}
-      <p className="field-help">{formatAdvisory(selectedModel, allowCloud)}</p>
-      {selectedModel && (
-        <p className="field-help subtle">Recommended for: {selectedModel.recommended_for}</p>
-      )}
+    <div>
+      <TextField
+        id="synthesis-model"
+        label="Synthesis model"
+        value={value}
+        onChange={(event: ChangeEvent<HTMLSelectElement>) => onChange(event.target.value)}
+        options={
+          <>
+            <option value="auto">Auto (recommended)</option>
+            {models.map((model) => {
+              const cloudBlocked = isGeminiModel(model) && !allowCloud && !geminiSelected;
+              return (
+                <option
+                  key={model.id}
+                  value={model.id}
+                  disabled={!model.available || cloudBlocked}
+                  title={cloudBlocked ? "Enable cloud AI below to use Gemini models" : undefined}
+                >
+                  {model.label}
+                  {!model.available ? " (not available)" : ""}
+                  {cloudBlocked ? " (enable cloud AI)" : ""}
+                </option>
+              );
+            })}
+          </>
+        }
+      />
+      {error && <p className="text-field__hint error">Model catalog unavailable: {error}</p>}
+      <div className="chip-row" style={{ marginTop: "-0.5rem", marginBottom: "1rem" }}>
+        <span className="chip chip--assist">{advisory}</span>
+        {selectedModel && (
+          <span className="chip chip--assist">Recommended for: {selectedModel.recommended_for}</span>
+        )}
+      </div>
     </div>
   );
 }

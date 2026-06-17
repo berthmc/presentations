@@ -1,20 +1,33 @@
 ---
 description: >-
-  When using Security Code Review MCP tools, enforce container paths and a /project
-  mirror; read documentation/SECURITY_MCP.md first.
+  When using Security Code Review MCP tools, enforce container paths under
+  /project/pptx; discover mounts via list_project_mount_entries.
 alwaysApply: true
 ---
 
-# Security MCP (CMS) — use server-visible paths
+# Security MCP (Presentations / pptx) — use server-visible paths
 
 When calling **`scan_python_security`**, **`check_code_quality`**, **`scan_infrastructure`**, or **`scan_secrets`**:
 
-1. **Open and follow [`documentation/SECURITY_MCP.md`](../../documentation/SECURITY_MCP.md)** at the repo root.
-2. **Do not** pass host-only paths (e.g. `C:\...` or workspace paths) unless the server is documented to use the same root. Arguments must use paths **inside** the scanner container under **`/project`**.
-3. **Use the correct argument name per tool**:
-   - Ruff and Bandit: `check_code_quality` and `scan_python_security` take `file_path`.
-   - Infra and secrets: `scan_infrastructure` and `scan_secrets` take `target_path`.
-   For **cms**, with multi-project mount: **`/project/cms/src`**.
-4. If path errors occur, confirm the mirror exists per `documentation/SECURITY_MCP.md`.
+1. The security-auditor MCP server (port **3001**) runs in Docker and only reads files under **`/project`** inside the container — **not** host paths like `C:\dev\pptx\...`.
+2. With the default multi-project setup (`AUDIT_PROJECT_PATH` = parent of repos, e.g. `C:\dev`), this repo is mounted as **`/project/pptx/`** — the folder name on disk, not `/project/src/...`.
+3. **Canonical scan paths for this repo:**
 
-*Note: This rule is maintained independently for the CMS workspace.*
+   | Host path | Pass to MCP (`file_path` or `target_path`) |
+   |-----------|---------------------------------------------|
+   | `C:\dev\pptx\backend\presentations\...` | `/project/pptx/backend/presentations/...` |
+   | Python package tree | `/project/pptx/backend/presentations` |
+   | Tests | `/project/pptx/tests` |
+   | Repo root (infra/secrets) | `/project/pptx` |
+
+4. **Use the correct argument name per tool:**
+   - Ruff and Bandit: `check_code_quality` and `scan_python_security` take **`file_path`**.
+   - Infra and secrets: `scan_infrastructure` and `scan_secrets` take **`target_path`**.
+
+5. **If unsure which repos are mounted**, call MCP tool **`list_project_mount_entries`** (no arguments). Expect `pptx` in the directory list. Build paths as `/project/<repo-name>/...`.
+
+6. **Common mistake:** passing `/project/src/presentations` — that path does **not** exist under multi-project mount. Use **`/project/pptx/backend/presentations`**.
+
+7. **Do not** scan `/project` root (policy limits; mixes repos). Target one repo subtree.
+
+8. If a tool returns **file not found** for `/project/pptx/...`, the mount may be stale — confirm with `list_project_mount_entries` or restart `security-auditor` from the codereview repo. Upstream docs: [`codereview/documentation/SECURITY_MCP.md`](../../../codereview/documentation/SECURITY_MCP.md).

@@ -1,8 +1,9 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ChangeEvent } from "react";
 import { downloadUrl, generateDeck, ingestPdf, qaSlideUrl } from "../api/client";
 import type { GenerateResult } from "../types";
 import { composeBrief, EXAMPLE_BRIEF } from "../utils/brief";
 import { ModelSelector } from "./ModelSelector";
+import { TextField } from "./TextField";
 
 function isGeminiModelId(modelId: string): boolean {
   return modelId.startsWith("gemini");
@@ -160,75 +161,112 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
 
   return (
     <section className="md3-card">
-      <h2>Generate Presentation</h2>
-      <p className="brief-guidance">
-        Describe your presentation using the fields below. Provide at least a topic; audience, goal, tone, target
-        length, and key points help the model structure slides appropriately. This is a content brief, not a
-        per-slide design script. Optionally attach PDFs as source documents for factual grounding.
-      </p>
-      <button type="button" className="text-link" onClick={loadExampleBrief}>
-        Load example brief
-      </button>
-      <div className="field">
-        <label htmlFor="title">Title</label>
-        <input id="title" value={title} onChange={(event) => setTitle(event.target.value)} />
+      <header className="section-header">
+        <h2>Generate Presentation</h2>
+        <button type="button" className="text" onClick={loadExampleBrief}>
+          Load example brief
+        </button>
+      </header>
+
+      <div className="callout">
+        <span className="chip chip--assist">Content brief</span>
+        <p>
+          Describe your presentation using the fields below. Provide at least a topic; audience, goal, tone, target
+          length, and key points help the model structure slides appropriately. Optionally attach PDFs as source
+          documents for factual grounding.
+        </p>
       </div>
-      <div className="field">
-        <label htmlFor="mode">Mode</label>
-        <select id="mode" value={mode} onChange={(event) => onModeChange(event.target.value as "scratch" | "template")}>
-          <option value="scratch">scratch</option>
-          <option value="template">template</option>
-        </select>
+
+      <TextField id="title" label="Title" value={title} onChange={(event: ChangeEvent<HTMLInputElement>) => setTitle(event.target.value)} />
+
+      <div className="text-field">
+        <span className="text-field__label" style={{ position: "static", marginBottom: "0.5rem" }}>
+          Mode
+        </span>
+        <div className="segmented-button" role="group" aria-label="Generation mode">
+          <button
+            type="button"
+            className="segmented-button__option"
+            aria-pressed={mode === "scratch"}
+            onClick={() => onModeChange("scratch")}
+          >
+            Scratch
+          </button>
+          <button
+            type="button"
+            className="segmented-button__option"
+            aria-pressed={mode === "template"}
+            onClick={() => onModeChange("template")}
+          >
+            Template
+          </button>
+        </div>
       </div>
+
       <ModelSelector value={synthesisModel} onChange={handleSynthesisModelChange} allowCloud={allowCloud} />
-      <div className="field">
-        <label htmlFor="topic">Topic / details</label>
-        <textarea
-          id="topic"
-          className="textarea-md"
-          value={topic}
-          onChange={(event) => setTopic(event.target.value)}
-          placeholder="Main subject and any context the model should know…"
-        />
-      </div>
-      <div className="field">
-        <label>Source documents (optional)</label>
-        <p className="field-hint">
-          Upload one or more PDFs to ground slide content in source facts. The extracted text is not used as the brief.
+
+      <TextField
+        id="topic"
+        label="Topic / details"
+        multiline
+        className="textarea-md"
+        value={topic}
+        onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setTopic(event.target.value)}
+      />
+
+      <div className="text-field">
+        <span className="text-field__label" style={{ position: "static", marginBottom: "0.5rem" }}>
+          Source documents (optional)
+        </span>
+        <p className="text-field__hint" style={{ margin: "0 0 0.5rem" }}>
+          Upload one or more PDFs to ground slide content in source facts.
         </p>
         <input
           ref={pdfInputRef}
           type="file"
+          className="hidden-input"
           accept=".pdf,application/pdf"
           multiple
-          hidden
           onChange={handlePdfUpload}
         />
         <div className="source-doc-row">
           <button
             type="button"
-            className="outline"
+            className="tonal btn-with-icon"
             onClick={() => pdfInputRef.current?.click()}
             disabled={busy || ingesting}
           >
+            <span className="material-symbols-rounded">picture_as_pdf</span>
             {ingesting ? `Extracting PDF${ingestingCount > 1 ? "s" : ""}…` : "Upload PDFs"}
           </button>
           {sourceDocs.length > 0 && (
-            <button type="button" className="text-link" onClick={clearSourceDocuments} disabled={busy || ingesting}>
+            <button type="button" className="text" onClick={clearSourceDocuments} disabled={busy || ingesting}>
               Remove all
             </button>
           )}
         </div>
         {sourceDocs.length > 0 && (
-          <div className="source-doc-row">
+          <div className="chip-row" style={{ marginTop: "0.75rem" }}>
             {sourceDocs.map((doc, index) => (
-              <span key={`${doc.filename}-${index}`} className="source-chip">
+              <span key={`${doc.filename}-${index}`} className="chip chip--input">
                 {doc.filename} · {doc.text.length.toLocaleString()} chars
-                <button type="button" className="text-link" onClick={() => toggleSourcePreview(index)}>
-                  {previewIndex === index ? "Hide preview" : "Preview"}
+                <button
+                  type="button"
+                  className="chip__dismiss"
+                  aria-label={`Preview ${doc.filename}`}
+                  onClick={() => toggleSourcePreview(index)}
+                >
+                  <span className="material-symbols-rounded">
+                    {previewIndex === index ? "visibility_off" : "visibility"}
+                  </span>
                 </button>
-                <button type="button" className="text-link" onClick={() => removeSourceDocument(index)}>
-                  Remove
+                <button
+                  type="button"
+                  className="chip__dismiss"
+                  aria-label={`Remove ${doc.filename}`}
+                  onClick={() => removeSourceDocument(index)}
+                >
+                  <span className="material-symbols-rounded">close</span>
                 </button>
               </span>
             ))}
@@ -241,83 +279,89 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
           </pre>
         )}
       </div>
+
       <div className="field-grid">
-        <div className="field">
-          <label htmlFor="audience">Audience</label>
-          <input
-            id="audience"
-            value={audience}
-            onChange={(event) => setAudience(event.target.value)}
-            placeholder="e.g. EU retail investors"
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="goal">Goal</label>
-          <input
-            id="goal"
-            value={goal}
-            onChange={(event) => setGoal(event.target.value)}
-            placeholder="e.g. Explain regulatory impact"
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="tone">Tone</label>
-          <input
-            id="tone"
-            value={tone}
-            onChange={(event) => setTone(event.target.value)}
-            placeholder="e.g. Professional, objective"
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="slide-count">Target length (slides)</label>
-          <input
-            id="slide-count"
-            type="number"
-            min={1}
-            max={50}
-            value={slideCount}
-            onChange={(event) => setSlideCount(event.target.value)}
-            placeholder="e.g. 8"
-          />
-        </div>
-      </div>
-      <div className="field">
-        <label htmlFor="key-points">Key points</label>
-        <textarea
-          id="key-points"
-          className="textarea-sm"
-          value={keyPoints}
-          onChange={(event) => setKeyPoints(event.target.value)}
-          placeholder="One point per line…"
+        <TextField
+          id="audience"
+          label="Audience"
+          value={audience}
+          onChange={(event: ChangeEvent<HTMLInputElement>) => setAudience(event.target.value)}
+        />
+        <TextField id="goal" label="Goal" value={goal} onChange={(event: ChangeEvent<HTMLInputElement>) => setGoal(event.target.value)} />
+        <TextField id="tone" label="Tone" value={tone} onChange={(event: ChangeEvent<HTMLInputElement>) => setTone(event.target.value)} />
+        <TextField
+          id="slide-count"
+          label="Target length (slides)"
+          type="number"
+          min={1}
+          max={50}
+          value={slideCount}
+          onChange={(event: ChangeEvent<HTMLInputElement>) => setSlideCount(event.target.value)}
         />
       </div>
-      <div className="checkbox-row">
-        <input id="run-qa" type="checkbox" checked={runQa} onChange={(event) => setRunQa(event.target.checked)} />
-        <label htmlFor="run-qa">Run visual QA</label>
+
+      <TextField
+        id="key-points"
+        label="Key points"
+        multiline
+        className="textarea-sm"
+        value={keyPoints}
+        onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setKeyPoints(event.target.value)}
+      />
+
+      <div className="text-field">
+        <span className="text-field__label" style={{ position: "static", marginBottom: "0.5rem" }}>
+          Options
+        </span>
+        <div className="segmented-button" role="group" aria-label="Generation options">
+          <button
+            type="button"
+            className="segmented-button__option"
+            aria-pressed={runQa}
+            onClick={() => setRunQa((value) => !value)}
+          >
+            Visual QA
+          </button>
+          <button
+            type="button"
+            className="segmented-button__option"
+            aria-pressed={allowCloud || geminiModelSelected}
+            disabled={geminiModelSelected}
+            onClick={() => setAllowCloud((value) => !value)}
+          >
+            Cloud AI
+          </button>
+        </div>
+        {geminiModelSelected && (
+          <p className="text-field__hint">A Gemini model is selected; cloud AI is required for synthesis.</p>
+        )}
+        {!geminiModelSelected && allowCloud && (
+          <p className="text-field__hint">
+            Your brief and source documents will be sent to Google Vertex AI when using Gemini.
+          </p>
+        )}
       </div>
-      <div className="checkbox-row">
-        <input
-          id="allow-cloud"
-          type="checkbox"
-          checked={allowCloud}
-          disabled={geminiModelSelected}
-          onChange={(event) => setAllowCloud(event.target.checked)}
-        />
-        <label htmlFor="allow-cloud">
-          Allow Gemini (cloud AI) — your brief and source documents will be sent to Google Vertex AI
-        </label>
-      </div>
-      {geminiModelSelected && (
-        <p className="field-hint">A Gemini model is selected; cloud AI is required for synthesis.</p>
-      )}
-      <button type="button" className="primary" onClick={handleGenerate} disabled={busy}>
-        {busy ? "Generating…" : "Generate"}
+
+      <button type="button" className="primary extended-fab" onClick={handleGenerate} disabled={busy}>
+        <span className="material-symbols-rounded">rocket_launch</span>
+        {busy ? "Generating…" : "Generate presentation"}
       </button>
+
+      {busy && (
+        <div className="linear-progress" role="progressbar" aria-label="Generating presentation">
+          <div className="linear-progress__bar" />
+        </div>
+      )}
+
       <p className={`status${status.startsWith("Error") || status.includes("failed") ? " error" : ""}`}>{status}</p>
+
       {result && (
-        <>
+        <section className="md3-card md3-card--success" style={{ marginTop: "1.25rem" }}>
+          <h3 style={{ margin: "0 0 0.75rem", fontSize: "var(--md-sys-typescale-title-medium-size)" }}>
+            Generation complete
+          </h3>
           <a className="download-link" href={downloadUrl(result.output_path)}>
+            <span className="material-symbols-rounded">download</span>
             Download {result.output_path.split(/[/\\]/).pop()}
           </a>
           {result.qa_report && (
@@ -341,7 +385,7 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
               )}
             </>
           )}
-        </>
+        </section>
       )}
     </section>
   );

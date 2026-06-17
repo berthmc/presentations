@@ -8,7 +8,7 @@ globs:
 # Testing (CMS)
 
 ## Commands
-- Lint: `ruff check src/ tests/`
+- Lint: `ruff check backend/ tests/`
 - Tests: `PYTHONPATH=src python -m pytest tests/ -v --tb=short` (from repo root, using `.venv`)
 - Prefer Docker for integration runs; do not suggest bare `python` on host for production-like checks.
 
