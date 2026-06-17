@@ -30,14 +30,14 @@
   --md-sys-color-error-container: #fee2e2;
   --md-sys-color-on-error-container: #7f1d1d;
 
-  --md-sys-color-surface: #eef2ff;
-  --md-sys-color-surface-dim: #dde4f8;
-  --md-sys-color-surface-bright: #f8faff;
+  --md-sys-color-surface: #f8fafc;
+  --md-sys-color-surface-dim: #e8edf4;
+  --md-sys-color-surface-bright: #ffffff;
   --md-sys-color-surface-container-lowest: #ffffff;
-  --md-sys-color-surface-container-low: #e8edff;
-  --md-sys-color-surface-container: #dce3ff;
-  --md-sys-color-surface-container-high: #c7d0f4;
-  --md-sys-color-surface-container-highest: #b8c4ef;
+  --md-sys-color-surface-container-low: #f1f5f9;
+  --md-sys-color-surface-container: #e2e8f0;
+  --md-sys-color-surface-container-high: #cbd5e1;
+  --md-sys-color-surface-container-highest: #b0bec5;
 
   --md-sys-color-on-surface: #0f172a;
   --md-sys-color-on-surface-variant: #475569;
@@ -128,12 +128,12 @@
 }
 
 html[data-theme="dark"] {
-  --md-sys-color-surface: #0f172a;
-  --md-sys-color-surface-dim: #0b1220;
-  --md-sys-color-surface-bright: #1e293b;
-  --md-sys-color-surface-container-lowest: #1e293b;
-  --md-sys-color-surface-container-low: #1e293b;
-  --md-sys-color-surface-container: #334155;
+  --md-sys-color-surface: #060f1e;
+  --md-sys-color-surface-dim: #030a14;
+  --md-sys-color-surface-bright: #0f1f36;
+  --md-sys-color-surface-container-lowest: #0a1628;
+  --md-sys-color-surface-container-low: #0d1d30;
+  --md-sys-color-surface-container: #152540;
   --md-sys-color-surface-container-high: #475569;
   --md-sys-color-surface-container-highest: #64748b;
 
@@ -177,6 +177,13 @@ body {
   line-height: var(--md-sys-typescale-body-large-line);
   color: var(--md-sys-color-on-surface);
   background: var(--md-sys-color-surface);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-family-display);
+  font-weight: 600;
 }
 
 #root {
@@ -286,20 +293,33 @@ body {
 
 .nav-tab {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
   flex: 1;
   min-width: 5rem;
   max-width: 12rem;
-  padding: 0.875rem 1rem;
+  padding: 0.625rem 1rem;
   border: none;
   background: transparent;
   color: var(--md-sys-color-on-surface-variant);
   font-family: var(--font-family);
-  font-size: var(--md-sys-typescale-title-small-size);
-  font-weight: var(--md-sys-typescale-title-small-weight);
-  line-height: var(--md-sys-typescale-title-small-line);
   cursor: pointer;
   border-radius: 0;
-  min-height: 48px;
+  min-height: 64px;
+}
+
+.nav-tab__icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.nav-tab__text {
+  font-size: var(--md-sys-typescale-label-medium-size);
+  font-weight: 500;
+  line-height: var(--md-sys-typescale-label-medium-line);
 }
 
 .nav-tab::before {
@@ -514,8 +534,9 @@ button.extended-fab:hover {
 
 .section-header h2 {
   margin: 0;
+  font-family: var(--font-family-display);
   font-size: var(--md-sys-typescale-headline-small-size);
-  font-weight: var(--md-sys-typescale-headline-small-weight);
+  font-weight: 600;
   line-height: var(--md-sys-typescale-headline-small-line);
 }
 
@@ -794,6 +815,86 @@ button.extended-fab:hover {
   font-size: var(--md-sys-typescale-body-medium-size);
   line-height: var(--md-sys-typescale-body-medium-line);
   color: var(--md-sys-color-on-surface-variant);
+}
+
+.callout--takeaways {
+  border-left-color: var(--md-sys-color-bull);
+  background: color-mix(in srgb, var(--md-sys-color-bull) 6%, var(--md-sys-color-surface-container));
+}
+
+/* ── Template cards ───────────────────────────────────────────────────────── */
+
+.template-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.template-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  padding: 1rem 1.25rem;
+  border-radius: var(--md-sys-shape-corner-medium);
+  border: 2px solid var(--md-sys-color-outline-variant);
+  background: var(--md-sys-color-surface-container-lowest);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color var(--md-motion-duration-short) var(--md-motion-standard),
+    box-shadow var(--md-motion-duration-short) var(--md-motion-standard);
+}
+
+.template-card:hover {
+  box-shadow: var(--md-sys-elevation-1);
+}
+
+.template-card--selected {
+  border-color: var(--md-sys-color-primary);
+  background: var(--md-sys-color-primary-container);
+}
+
+.template-card__icon {
+  flex-shrink: 0;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 1.75rem;
+}
+
+.template-card--selected .template-card__icon {
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.template-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.template-card__title {
+  margin: 0;
+  font-family: var(--font-family-display);
+  font-size: var(--md-sys-typescale-title-medium-size);
+  font-weight: 600;
+  line-height: var(--md-sys-typescale-title-medium-line);
+  color: var(--md-sys-color-on-surface);
+}
+
+.template-card--selected .template-card__title {
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.template-card__meta {
+  font-size: var(--md-sys-typescale-label-medium-size);
+  line-height: var(--md-sys-typescale-label-medium-line);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.template-card--selected .template-card__meta {
+  color: var(--md-sys-color-on-primary-container);
+  opacity: 0.85;
 }
 
 /* ── Signal tiles (diagnostics) ───────────────────────────────────────────── */
