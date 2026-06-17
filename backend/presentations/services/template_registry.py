@@ -54,6 +54,17 @@ class TemplateRegistry:
         records = self._load_records()
         return records[0] if records else None
 
+    def get_default_pptx(self) -> TemplateRecord | None:
+        """Return the default .pptx template, or the first .pptx in the library."""
+        records = self._load_records()
+        for record in records:
+            if record.is_default and record.source_type == "pptx":
+                return record
+        for record in records:
+            if record.source_type == "pptx":
+                return record
+        return None
+
     def register(
         self,
         name: str,

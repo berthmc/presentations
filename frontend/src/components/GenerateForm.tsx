@@ -17,12 +17,13 @@ function mergeSourceDocuments(docs: SourceDoc[]): string {
 
 interface Props {
   templateId: string;
+  templateSourceType: string | null;
   mode: "scratch" | "template";
   onModeChange: (mode: "scratch" | "template") => void;
   onResult: (result: GenerateResult | null) => void;
 }
 
-export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props) {
+export function GenerateForm({ templateId, templateSourceType, mode, onModeChange, onResult }: Props) {
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
   const [audience, setAudience] = useState("");
@@ -125,6 +126,16 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
       setStatus("Enter a topic or details for the presentation.");
       return;
     }
+    if (mode === "template") {
+      if (!templateId) {
+        setStatus("Select a .pptx template on the Templates tab before using Template mode.");
+        return;
+      }
+      if (templateSourceType !== "pptx") {
+        setStatus("Template mode requires a .pptx library template. Choose one on the Templates tab.");
+        return;
+      }
+    }
     const brief = composeBrief({
       topic,
       audience,
@@ -196,7 +207,13 @@ export function GenerateForm({ templateId, mode, onModeChange, onResult }: Props
             type="button"
             className="segmented-button__option"
             aria-pressed={mode === "template"}
-            onClick={() => onModeChange("template")}
+            onClick={() => {
+              if (!templateId || templateSourceType !== "pptx") {
+                setStatus("Template mode requires a .pptx library template. Select one on the Templates tab.");
+                return;
+              }
+              onModeChange("template");
+            }}
           >
             Template
           </button>
