@@ -9,6 +9,7 @@ from loguru import logger
 from pydantic import ValidationError
 
 from presentations.config.settings import Settings, get_settings
+from presentations.core.layout_roles import classify_layout_role, enforce_structural_layouts
 from presentations.core.schemas import (
     DeckSpec,
     DigestEntry,
@@ -86,6 +87,12 @@ Rules:
 - ph_idx values are often non-sequential (for example 0, 10, 11). Never invent placeholder indices.
 - For each slide, only use ph_idx values listed under allowed_ph_idx for that layout_index.
 - Vary layouts across slides; avoid repeating the same layout for every slide.
+- Slide 1 must use a layout with role "title" (title slide).
+- Insert at least one layout with role "section" between major topic groups when available.
+- Use a layout with role "two-content" for comparisons or paired concepts when available.
+- The final slide should use a layout with role "closing" or "section" when available.
+- Prefer layouts whose role matches the slide content (title, section, two-content, content, closing).
+- Do not use markdown formatting in content strings; write plain text only (no ** or * markers).
 - Keep bullet points concise but substantive; use \\n for line breaks within a placeholder.
 - When the brief includes "Target length: N slides", produce approximately N slides.
 - Return JSON matching the required schema with title and slides fields.
@@ -112,8 +119,9 @@ def _compact_layout(layout: LayoutProfile) -> dict[str, Any]:
             {
                 "layout_index": idx,
                 "name": entry.name,
+                "role": classify_layout_role(entry),
                 "allowed_ph_idx": [ph.index for ph in entry.placeholders],
-                "placeholders": [{"ph_idx": ph.index, "name": ph.name} for ph in entry.placeholders],
+                "placeholders": [{"ph_idx": ph.index, "name": ph.name, "type": ph.type} for ph in entry.placeholders],
             }
             for idx, entry in sorted(layout.layouts.items())
         ]
@@ -252,16 +260,20 @@ async def _prepare_source_context(
     source_context: str | None,
     brief: str,
     *,
+    digest_source_context: str | None = None,
     synthesis_model: str | None,
     allow_cloud: bool,
     settings: Settings,
 ) -> str | None:
     """Optionally digest raw source context into compact grounding text."""
-    if not source_context or not settings.enable_digest_phase:
+    digest_input = digest_source_context
+    if not digest_input or not settings.enable_digest_phase:
         return source_context
 
+    chunks = _chunk_text(digest_input, settings.digest_chunk_chars)
+    logger.info("Digest phase starting chunks={} chunk_chars={}", len(chunks), settings.digest_chunk_chars)
     digest = await digest_source_context(
-        source_context,
+        digest_input,
         brief,
         synthesis_model=synthesis_model,
         allow_cloud=allow_cloud,
@@ -290,6 +302,7 @@ def _payload_to_deck(
     deck = DeckSpec.model_validate(payload)
     if layout and mode == GenerationMode.TEMPLATE:
         validate_deck_against_layout(deck, layout)
+        deck = enforce_structural_layouts(deck, layout)
     return deck
 
 
@@ -347,6 +360,7 @@ async def synthesize_deck_spec(
     mode: GenerationMode = GenerationMode.TEMPLATE,
     title: str | None = None,
     source_context: str | None = None,
+    digest_source_context: str | None = None,
     synthesis_model: str | None = None,
     allow_cloud: bool = False,
     max_retries: int = 2,
@@ -359,6 +373,7 @@ async def synthesize_deck_spec(
         mode: Template or scratch generation.
         title: Optional deck title override.
         source_context: Optional PDF-derived text for factual grounding.
+        digest_source_context: Raw user source text to digest; digest is skipped when absent.
         synthesis_model: Optional synthesis model override (Ollama tag or Gemini id).
         allow_cloud: When True, Gemini may be used as fallback or when Ollama is unavailable.
         max_retries: Number of repair attempts on validation failure per provider.
@@ -370,6 +385,7 @@ async def synthesize_deck_spec(
     prepared_source = await _prepare_source_context(
         source_context,
         brief,
+        digest_source_context=digest_source_context,
         synthesis_model=synthesis_model,
         allow_cloud=allow_cloud,
         settings=settings,
@@ -396,7 +412,12 @@ async def synthesize_deck_spec(
                 source_context=prepared_source,
                 title=title,
             )
-            logger.info("Synthesized deck with {} slides via {}", len(deck.slides), provider.name)
+            logger.info(
+                "Synthesized deck with {} slides via {} model={}",
+                len(deck.slides),
+                provider.name,
+                getattr(provider, "model", getattr(provider, "synthesis_model", "unknown")),
+            )
             return deck
         except (ValidationError, ValueError, KeyError) as exc:
             last_error = exc

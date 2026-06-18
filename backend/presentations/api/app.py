@@ -1,11 +1,12 @@
 """FastAPI REST API for presentation generation."""
 
+import asyncio
 import shutil
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from loguru import logger
 
 from presentations.config.logging_config import configure_logging
@@ -17,6 +18,7 @@ from presentations.ingest.pdf_ingest import extract_source_context_from_pdf
 from presentations.llm.catalog import list_available_models
 from presentations.mcp.server import mcp as mcp_server
 from presentations.qa.loop import run_qa_loop
+from presentations.services.job_store import JobStatus, get_job_store
 from presentations.services.pipeline import generate_presentation
 from presentations.services.template_registry import get_template_registry
 
@@ -200,17 +202,68 @@ async def ingest_pdf(file: UploadFile = File(...)) -> dict[str, str]:
     }
 
 
-@app.post("/generate")
-async def generate_endpoint(request: GenerateRequest) -> dict:
-    """Generate a presentation from a brief."""
+async def _run_generation_job(job_id: str, request: GenerateRequest) -> None:
+    """Execute the generation pipeline and persist job status updates."""
+    store = get_job_store()
+    await store.update(job_id, status=JobStatus.RUNNING)
     try:
-        result = await generate_presentation(request)
-        return result.model_dump()
+        result = await generate_presentation(request, job_id=job_id)
     except (ValueError, RuntimeError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.warning("Generation job {} failed: {}", job_id, exc)
+        await store.update(job_id, status=JobStatus.FAILED, error=str(exc))
+        return
+    except Exception as exc:
+        logger.exception("Generation job {} failed unexpectedly", job_id)
+        await store.update(job_id, status=JobStatus.FAILED, error=str(exc))
+        return
+    await store.update(job_id, status=JobStatus.DONE, result=result)
 
 
-@app.post("/generate/upload")
+async def _enqueue_generation(request: GenerateRequest) -> JSONResponse:
+    """Create a generation job and schedule background execution."""
+    store = get_job_store()
+    job_id = await store.create()
+    asyncio.create_task(_run_generation_job(job_id, request))
+    return JSONResponse(
+        status_code=202,
+        content={"job_id": job_id, "status": JobStatus.QUEUED.value},
+    )
+
+
+@app.post("/generate", status_code=202)
+async def generate_endpoint(request: GenerateRequest) -> JSONResponse:
+    """Enqueue presentation generation and return a job identifier."""
+    return await _enqueue_generation(request)
+
+
+@app.get("/jobs/{job_id}")
+async def get_job(job_id: str) -> dict:
+    """Return current status for a generation job."""
+    store = get_job_store()
+    record = await store.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    return store.to_status_response(record).model_dump()
+
+
+@app.get("/jobs/{job_id}/result")
+async def get_job_result(job_id: str) -> dict:
+    """Return the full generation result once a job completes."""
+    store = get_job_store()
+    record = await store.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if record.status == JobStatus.FAILED:
+        raise HTTPException(status_code=400, detail=record.error or "Generation failed")
+    if record.status != JobStatus.DONE or record.result is None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job is not complete (status={record.status.value})",
+        )
+    return record.result.model_dump()
+
+
+@app.post("/generate/upload", status_code=202)
 async def generate_upload(
     brief: str = Form(...),
     mode: str = Form("scratch"),
@@ -256,11 +309,7 @@ async def generate_upload(
         source_context=source_context,
         allow_cloud=allow_cloud,
     )
-    try:
-        result = await generate_presentation(request)
-    except (ValueError, RuntimeError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return result.model_dump()
+    return await _enqueue_generation(request)
 
 
 @app.post("/qa/render")

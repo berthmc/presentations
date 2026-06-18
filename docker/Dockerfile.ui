@@ -1,5 +1,7 @@
 FROM node:20-alpine AS build
 
+RUN npm install -g npm@11.17.0
+
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm install

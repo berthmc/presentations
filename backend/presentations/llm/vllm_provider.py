@@ -1,12 +1,14 @@
 """vLLM OpenAI-compatible local LLM provider."""
 
 import json
+import time
 from typing import Any
 
 import httpx
 from loguru import logger
 from openai import AsyncOpenAI
 
+from presentations.config.pipeline_logging import log_llm_call
 from presentations.config.settings import get_settings
 from presentations.llm.base import LLMProvider
 from presentations.llm.ollama_provider import parse_json_content
@@ -41,6 +43,8 @@ class VLLMProvider(LLMProvider):
         if json_schema is not None:
             response_format = {"type": "json_schema", "json_schema": {"name": "response", "schema": json_schema}}
 
+        prompt_chars = len(system_prompt) + len(user_prompt)
+        started = time.perf_counter()
         try:
             response = await self._client.chat.completions.create(
                 model=self.model,
@@ -56,11 +60,22 @@ class VLLMProvider(LLMProvider):
             logger.error("vLLM request failed (model={}): {}", self.model, exc)
             raise RuntimeError(f"vLLM synthesis failed: {exc}") from exc
 
+        duration_s = time.perf_counter() - started
         content = response.choices[0].message.content or ""
         try:
-            return parse_json_content(content)
+            parsed = parse_json_content(content)
         except json.JSONDecodeError as exc:
             raise ValueError("vLLM synthesis did not return valid JSON") from exc
+        usage = response.usage
+        log_llm_call(
+            provider=self.name,
+            model=self.model,
+            duration_s=duration_s,
+            prompt_chars=prompt_chars,
+            prompt_tokens=usage.prompt_tokens if usage else None,
+            completion_tokens=usage.completion_tokens if usage else None,
+        )
+        return parsed
 
     async def audit_slide_image(self, image_path: str, prompt: str) -> dict[str, Any]:
         """vLLM provider does not support vision in this pipeline."""

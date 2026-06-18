@@ -48,3 +48,10 @@ export interface GenerateResult {
   output_path: string;
   qa_report?: QAReport | null;
 }
+
+export interface JobStatusResponse {
+  job_id: string;
+  status: "queued" | "running" | "done" | "failed";
+  stage?: string | null;
+  error?: string | null;
+}

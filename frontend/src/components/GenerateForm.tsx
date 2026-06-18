@@ -146,20 +146,23 @@ export function GenerateForm({ templateId, templateSourceType, mode, onModeChang
     });
     const sourceContext = sourceDocs.length ? mergeSourceDocuments(sourceDocs) : undefined;
     setBusy(true);
-    setStatus("Generating…");
+    setStatus("Queued…");
     setResult(null);
     onResult(null);
     try {
-      const payload = await generateDeck({
-        brief,
-        mode,
-        title: title || undefined,
-        run_qa: runQa,
-        template_id: templateId || null,
-        synthesis_model: synthesisModel === "auto" ? undefined : synthesisModel,
-        source_context: sourceContext,
-        allow_cloud: allowCloud,
-      });
+      const payload = await generateDeck(
+        {
+          brief,
+          mode,
+          title: title || undefined,
+          run_qa: runQa,
+          template_id: templateId || null,
+          synthesis_model: synthesisModel === "auto" ? undefined : synthesisModel,
+          source_context: sourceContext,
+          allow_cloud: allowCloud,
+        },
+        (message) => setStatus(message),
+      );
       setResult(payload);
       onResult(payload);
       setStatus(`Generated: ${payload.output_path}`);

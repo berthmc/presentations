@@ -1,11 +1,13 @@
 """Google Gemini cloud fallback provider."""
 
 import json
+import time
 from pathlib import Path
 from typing import Any
 
 from loguru import logger
 
+from presentations.config.pipeline_logging import log_llm_call
 from presentations.config.settings import get_settings
 from presentations.llm.base import LLMProvider
 
@@ -38,17 +40,33 @@ class GeminiProvider(LLMProvider):
         """Generate JSON via Gemini."""
         client = self._get_client()
         prompt = f"{system_prompt}\n\n{user_prompt}\n\nRespond with valid JSON only."
+        prompt_chars = len(prompt)
+        started = time.perf_counter()
         response = client.models.generate_content(model=self.model, contents=prompt)
+        duration_s = time.perf_counter() - started
         text = response.text or "{}"
         try:
-            return json.loads(text)
+            parsed = json.loads(text)
         except json.JSONDecodeError:
             start = text.find("{")
             end = text.rfind("}") + 1
             if start >= 0 and end > start:
-                return json.loads(text[start:end])
-            logger.error("Gemini returned invalid JSON: {}", text[:500])
-            raise ValueError("Gemini synthesis did not return valid JSON")
+                parsed = json.loads(text[start:end])
+            else:
+                logger.error("Gemini returned invalid JSON: {}", text[:500])
+                raise ValueError("Gemini synthesis did not return valid JSON")
+        usage = getattr(response, "usage_metadata", None)
+        prompt_tokens = getattr(usage, "prompt_token_count", None) if usage else None
+        completion_tokens = getattr(usage, "candidates_token_count", None) if usage else None
+        log_llm_call(
+            provider=self.name,
+            model=self.model,
+            duration_s=duration_s,
+            prompt_chars=prompt_chars,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+        )
+        return parsed
 
     async def audit_slide_image(self, image_path: str, prompt: str) -> dict[str, Any]:
         """Audit slide image with Gemini vision."""

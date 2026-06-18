@@ -1,7 +1,6 @@
 """Tests for deck layout validation and sanitization."""
 
 import pytest
-
 from presentations.core.schemas import (
     DeckSpec,
     GenerationMode,
@@ -34,6 +33,10 @@ LAYOUT = LayoutProfile(
                 PlaceholderInfo(index=0, name="heading", type="TITLE"),
                 PlaceholderInfo(index=11, name="body", type="BODY"),
             ],
+        ),
+        20: LayoutEntry(
+            name="Chapter page option 1",
+            placeholders=[PlaceholderInfo(index=0, name="title", type="TITLE")],
         ),
     },
 )
@@ -75,20 +78,28 @@ def test_sanitize_deck_spec_remaps_orphan_content() -> None:
         mode=GenerationMode.TEMPLATE,
         slides=[
             SlideSpec(
+                layout_index=1,
+                mappings=[PlaceholderMapping(ph_idx=0, content="Title")],
+            ),
+            SlideSpec(
                 layout_index=14,
                 mappings=[
                     PlaceholderMapping(ph_idx=2, content="Orphan A"),
                     PlaceholderMapping(ph_idx=4, content="Orphan B"),
                 ],
-            )
+            ),
+            SlideSpec(
+                layout_index=20,
+                mappings=[PlaceholderMapping(ph_idx=0, content="Closing")],
+            ),
         ],
     )
     sanitized = sanitize_deck_spec(deck, LAYOUT)
-    assert sanitized.slides[0].layout_index == 14
-    assert len(sanitized.slides[0].mappings) == 1
-    assert sanitized.slides[0].mappings[0].ph_idx == 0
-    assert "Orphan A" in sanitized.slides[0].mappings[0].content
-    assert "Orphan B" in sanitized.slides[0].mappings[0].content
+    assert sanitized.slides[1].layout_index == 14
+    assert len(sanitized.slides[1].mappings) == 1
+    assert sanitized.slides[1].mappings[0].ph_idx == 0
+    assert "Orphan A" in sanitized.slides[1].mappings[0].content
+    assert "Orphan B" in sanitized.slides[1].mappings[0].content
 
 
 def test_sanitize_deck_spec_keeps_valid_mappings() -> None:
@@ -108,3 +119,27 @@ def test_sanitize_deck_spec_keeps_valid_mappings() -> None:
     sanitized = sanitize_deck_spec(deck, LAYOUT)
     assert len(sanitized.slides[0].mappings) == 2
     assert sanitized.slides[0].mappings[0].ph_idx == 0
+
+
+def test_sanitize_deck_spec_enforces_title_and_closing_layouts() -> None:
+    deck = DeckSpec(
+        title="Test",
+        mode=GenerationMode.TEMPLATE,
+        slides=[
+            SlideSpec(
+                layout_index=14,
+                mappings=[PlaceholderMapping(ph_idx=0, content="Opening")],
+            ),
+            SlideSpec(
+                layout_index=14,
+                mappings=[PlaceholderMapping(ph_idx=0, content="Middle")],
+            ),
+            SlideSpec(
+                layout_index=14,
+                mappings=[PlaceholderMapping(ph_idx=0, content="Closing")],
+            ),
+        ],
+    )
+    sanitized = sanitize_deck_spec(deck, LAYOUT)
+    assert sanitized.slides[0].layout_index == 1
+    assert sanitized.slides[-1].layout_index == 20

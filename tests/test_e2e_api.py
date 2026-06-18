@@ -1,11 +1,11 @@
 """End-to-end API smoke test for template library and generation wiring."""
 
+import asyncio
 from pathlib import Path
 
 import httpx
 import pytest
 from httpx import ASGITransport
-
 from presentations.api.app import app
 
 
@@ -54,11 +54,13 @@ async def test_generate_with_template_id_uses_registry(monkeypatch: pytest.Monke
     import presentations.config.settings as settings_module
     from presentations.compile.pptxgen_runner import compile_from_scratch
     from presentations.core.schemas import DeckSpec, GenerateResult, GenerationMode, PlaceholderMapping, SlideSpec
+    from presentations.services.job_store import reset_job_store
 
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     settings_module._settings = None
+    reset_job_store()
 
-    async def _fake_generate(request):
+    async def _fake_generate(request, *, job_id=None):
         deck = DeckSpec(
             title="E2E Deck",
             mode=GenerationMode.SCRATCH,
@@ -94,6 +96,19 @@ async def test_generate_with_template_id_uses_registry(monkeypatch: pytest.Monke
                 "run_qa": False,
             },
         )
-        assert response.status_code == 200
-        body = response.json()
+        assert response.status_code == 202
+        job_id = response.json()["job_id"]
+
+        for _ in range(30):
+            status_response = await client.get(f"/jobs/{job_id}")
+            assert status_response.status_code == 200
+            if status_response.json()["status"] == "done":
+                break
+            await asyncio.sleep(0.1)
+        else:
+            pytest.fail("Generation job did not complete in time")
+
+        result_response = await client.get(f"/jobs/{job_id}/result")
+        assert result_response.status_code == 200
+        body = result_response.json()
         assert Path(body["output_path"]).exists()
