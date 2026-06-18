@@ -5,6 +5,7 @@ interface BaseProps {
   label: string;
   hint?: ReactNode;
   hasValue?: boolean;
+  wrapperClassName?: string;
 }
 
 interface InputFieldProps extends BaseProps, Omit<InputHTMLAttributes<HTMLInputElement>, "id"> {
@@ -23,14 +24,24 @@ interface SelectFieldProps extends BaseProps, Omit<SelectHTMLAttributes<HTMLSele
 type TextFieldProps = InputFieldProps | TextareaFieldProps | (SelectFieldProps & { multiline?: undefined });
 
 export function TextField(props: TextFieldProps) {
-  const { id, label, hint, hasValue, multiline, ...rest } = props;
+  const { id, label, hint, hasValue, wrapperClassName, multiline, ...rest } = props;
   const showFloated = hasValue ?? false;
+
+  function wrapperClass(floated: boolean): string {
+    return [
+      "text-field",
+      floated ? "text-field--has-value" : "",
+      wrapperClassName ?? "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
 
   if (multiline) {
     const textareaProps = rest as TextareaHTMLAttributes<HTMLTextAreaElement>;
     const floated = showFloated || Boolean(textareaProps.value);
     return (
-      <div className={`text-field${floated ? " text-field--has-value" : ""}`}>
+      <div className={wrapperClass(floated)}>
         <textarea
           id={id}
           className={`text-field__input${textareaProps.className ? ` ${textareaProps.className}` : ""}`}
@@ -49,7 +60,7 @@ export function TextField(props: TextFieldProps) {
     const selectProps = rest as SelectHTMLAttributes<HTMLSelectElement>;
     const floated = showFloated || Boolean(selectProps.value);
     return (
-      <div className={`text-field${floated ? " text-field--has-value" : ""}`}>
+      <div className={wrapperClass(floated)}>
         <select
           id={id}
           className="text-field__input"
@@ -68,7 +79,7 @@ export function TextField(props: TextFieldProps) {
   const inputProps = rest as InputHTMLAttributes<HTMLInputElement>;
   const floated = showFloated || Boolean(inputProps.value);
   return (
-    <div className={`text-field${floated ? " text-field--has-value" : ""}`}>
+    <div className={wrapperClass(floated)}>
       <input
         id={id}
         className="text-field__input"
