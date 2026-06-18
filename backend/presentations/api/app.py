@@ -190,6 +190,19 @@ async def set_default_template(template_id: str) -> dict:
     return record.summary().model_dump(mode="json")
 
 
+@app.post("/templates/{template_id}/reindex")
+async def reindex_template(template_id: str) -> dict:
+    """Re-run layout discovery for a library template."""
+    registry = get_template_registry()
+    try:
+        record = registry.reindex(template_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return record.model_dump(mode="json")
+
+
 @app.post("/discover-layout")
 async def discover_layout_endpoint(template_path: str) -> dict:
     """Discover layout profile from a template path within the data directory."""

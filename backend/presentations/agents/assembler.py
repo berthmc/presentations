@@ -15,7 +15,7 @@ from presentations.agents.skill_rules import (
 from presentations.compile.pptxgen_runner import compile_from_scratch
 from presentations.compile.theme_palette import build_theme_palette
 from presentations.config.pipeline_logging import summarize_deck_spec, summarize_pptx_file
-from presentations.core.layout_roles import classify_layout_role
+from presentations.core.layout_roles import is_text_placeholder, layout_role_for_entry
 from presentations.core.schemas import GenerationMode
 from presentations.core.state import PipelineState
 from presentations.llm.layout_validate import sanitize_deck_spec
@@ -52,6 +52,11 @@ def compile_from_template(
 
     prs = Presentation(str(template))
     theme_palette = build_theme_palette(prs)
+    template_fonts = {}
+    if layout_profile and layout_profile.theme:
+        template_fonts = layout_profile.theme.get("fonts") or {}
+    major_font = template_fonts.get("major") or None
+    minor_font = template_fonts.get("minor") or None
     slide_ids = list(prs.slides._sldIdLst)  # noqa: SLF001
     for slide_id in slide_ids:
         r_id = slide_id.rId
@@ -66,7 +71,7 @@ def compile_from_template(
         accent = theme_palette.accent_for_slide(slide_num)
         layout_role = "content"
         if layout_profile and slide_spec.layout_index in layout_profile.layouts:
-            layout_role = classify_layout_role(layout_profile.layouts[slide_spec.layout_index])
+            layout_role = layout_role_for_entry(layout_profile.layouts[slide_spec.layout_index])
         is_section_layout = layout_role == "section"
         logger.debug(
             "Slide {} layout_index={} role={} accent={} mappings={} content_chars={}",
@@ -87,12 +92,14 @@ def compile_from_template(
                 )
                 continue
             ph_name = placeholder.name or ""
+            is_title = _is_title_placeholder(ph_name)
             fill_placeholder_with_rules(
                 placeholder,
                 mapping.content,
-                is_title=_is_title_placeholder(ph_name),
+                is_title=is_title,
                 accent=accent,
-                tint_title_accent=is_section_layout and _is_title_placeholder(ph_name),
+                tint_title_accent=is_section_layout and is_title,
+                font_name=major_font if is_title else minor_font,
             )
             filled_ph.add(mapping.ph_idx)
 
@@ -100,6 +107,8 @@ def compile_from_template(
             entry = layout_profile.layouts[slide_spec.layout_index]
             for ph in entry.placeholders:
                 if ph.index in filled_ph:
+                    continue
+                if not is_text_placeholder(ph.type):
                     continue
                 shape = _find_placeholder(slide, ph.index)
                 if shape is None:

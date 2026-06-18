@@ -19,6 +19,10 @@ class PlaceholderInfo(BaseModel):
     index: int
     name: str
     type: str
+    left: int | None = None
+    top: int | None = None
+    width: int | None = None
+    height: int | None = None
 
 
 class LayoutEntry(BaseModel):
@@ -26,6 +30,11 @@ class LayoutEntry(BaseModel):
 
     name: str
     placeholders: list[PlaceholderInfo]
+    role: str = "content"
+    summary: str = ""
+    has_picture: bool = False
+    has_chart: bool = False
+    has_table: bool = False
 
 
 class LayoutProfile(BaseModel):

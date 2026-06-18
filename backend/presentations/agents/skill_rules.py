@@ -129,6 +129,16 @@ def _apply_accent_to_run(run, accent: MSO_THEME_COLOR | None) -> None:
         return
 
 
+def _apply_font_to_run(run, font_name: str | None) -> None:
+    """Apply a template font name to a text run when provided."""
+    if not font_name:
+        return
+    try:
+        run.font.name = font_name
+    except AttributeError:
+        return
+
+
 def _add_segments_to_paragraph(
     paragraph,
     segments: list[TextSegment],
@@ -136,6 +146,7 @@ def _add_segments_to_paragraph(
     is_title: bool,
     accent: MSO_THEME_COLOR | None,
     tint_title_accent: bool,
+    font_name: str | None = None,
 ) -> None:
     """Add parsed inline segments to a paragraph as separate runs."""
     for segment in segments:
@@ -143,6 +154,7 @@ def _add_segments_to_paragraph(
         run.text = segment.text
         run.font.bold = is_title or segment.bold
         run.font.italic = segment.italic
+        _apply_font_to_run(run, font_name)
 
         if is_title and tint_title_accent and accent is not None:
             _apply_accent_to_run(run, accent)
@@ -157,6 +169,7 @@ def fill_placeholder_with_rules(
     is_title: bool = False,
     accent: MSO_THEME_COLOR | None = None,
     tint_title_accent: bool = False,
+    font_name: str | None = None,
 ) -> None:
     """Fill a python-pptx placeholder applying editing.md formatting rules."""
     lines = normalize_content_lines(content)
@@ -176,6 +189,7 @@ def fill_placeholder_with_rules(
             run = paragraph.add_run()
             run.text = line
             run.font.bold = True
+            _apply_font_to_run(run, font_name)
             if tint_title_accent and accent is not None:
                 _apply_accent_to_run(run, accent)
             continue
@@ -185,6 +199,7 @@ def fill_placeholder_with_rules(
             run = paragraph.add_run()
             run.text = segments[0].text
             run.font.bold = is_title or (index == 0 and len(lines) > 1 and ":" in line)
+            _apply_font_to_run(run, font_name)
             if run.font.bold and accent is not None and not is_title:
                 _apply_accent_to_run(run, accent)
             elif is_title and tint_title_accent and accent is not None:
@@ -197,6 +212,7 @@ def fill_placeholder_with_rules(
             is_title=is_title,
             accent=accent,
             tint_title_accent=tint_title_accent,
+            font_name=font_name,
         )
 
 
