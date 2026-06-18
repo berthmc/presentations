@@ -2,9 +2,8 @@
 
 from pathlib import Path
 
-import pytest
-
 import presentations.config.settings as settings_module
+import pytest
 from presentations.config.settings import Settings
 from presentations.services.template_registry import TemplateRegistry
 
@@ -60,6 +59,27 @@ def test_reindex_refreshes_layout_profile(registry: TemplateRegistry) -> None:
     reindexed = registry.reindex(record.id)
     assert reindexed.layout_profile.layouts
     assert reindexed.updated_at >= original_updated
+
+
+def test_resolve_self_heals_stale_pptx_theme(registry: TemplateRegistry) -> None:
+    matches = list(Path("documentation/briefs").glob("*Corporate*.pptx"))
+    if not matches:
+        matches = list(Path("documentation/briefs").glob("*.pptx"))
+    if not matches:
+        pytest.skip("No pptx template fixture available")
+
+    record = registry.register("Stale Theme Test", matches[0])
+    records = registry._load_records()
+    for cached in records:
+        if cached.id == record.id:
+            cached.layout_profile.theme = {}
+            cached.source_type = "pptx"
+    registry._save_records(records)
+
+    resolved = registry.resolve(template_id=record.id)
+    assert resolved is not None
+    fonts = resolved.layout_profile.theme.get("fonts") or {}
+    assert fonts.get("major") or fonts.get("minor")
 
 
 def test_get_default_pptx_prefers_first_pptx_when_default_is_md(registry: TemplateRegistry) -> None:

@@ -102,6 +102,16 @@ Rules:
 - Use a layout with role "two-content" for comparisons or paired concepts when available.
 - Use agenda, quote, timeline, or team layouts when the brief content fits those patterns.
 - Slide 1 must use a layout with role "title" (title slide).
+- The slide 1 title placeholder must contain the actual presentation title from the brief;
+  never output the words "Title Slide", a layout name, or a placeholder name as content.
+- Section/chapter layouts are dividers (heading only); place substantive bullet content on
+  content, two-content, or picture layouts — not on section/chapter divider layouts.
+- For two-content/multi-column layouts, map content to every body ph_idx listed
+  (for example both the left and right column), not just one.
+- When the brief lists 3-4 parallel items or requirements, prefer a single two-content or
+  multi-column comparison slide over several single-column slides.
+- Body placeholders: use concise bullet points (at most ~12 words each, at most 5 per slide);
+  never paste full prose paragraphs — split prose into bullets.
 - The final slide should use a layout with role "closing" or "section" when available.
 - Do not use markdown formatting in content strings; write plain text only (no ** or * markers).
 - Keep bullet points concise but substantive; use \\n for line breaks within a placeholder.

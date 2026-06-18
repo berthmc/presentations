@@ -160,6 +160,15 @@ class TemplateRegistry:
         self._save_records(records)
         return target
 
+    @staticmethod
+    def _profile_needs_refresh(record: TemplateRecord) -> bool:
+        """Return True when a cached pptx profile is missing enriched theme metadata."""
+        if record.source_type != "pptx":
+            return False
+        theme = record.layout_profile.theme or {}
+        fonts = theme.get("fonts") or {}
+        return not (fonts.get("major") or fonts.get("minor"))
+
     def reindex(self, template_id: str) -> TemplateRecord:
         """Re-run layout discovery for a registered template and refresh cached metadata."""
         records = self._load_records()
@@ -208,6 +217,9 @@ class TemplateRegistry:
             path = Path(record.file_path)
             if not path.exists():
                 raise FileNotFoundError(f"Template file missing: {path}")
+            if self._profile_needs_refresh(record):
+                logger.info("Refreshing stale layout profile for template {}", template_id)
+                record = self.reindex(template_id)
             return ResolvedTemplate(
                 template_id=record.id,
                 template_path=str(path.resolve()),

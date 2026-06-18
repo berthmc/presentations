@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from pptx.enum.dml import MSO_THEME_COLOR
-from pptx.enum.text import PP_ALIGN
+from pptx.enum.text import MSO_AUTO_SIZE, PP_ALIGN
 
 # --- Content patterns (SKILL.md + editing.md) ---
 
@@ -179,6 +179,9 @@ def fill_placeholder_with_rules(
 
     text_frame = placeholder.text_frame
     text_frame.clear()
+    text_frame.word_wrap = True
+    if not is_title:
+        text_frame.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
 
     for index, line in enumerate(lines):
         paragraph = text_frame.paragraphs[0] if index == 0 else text_frame.add_paragraph()
