@@ -1,6 +1,6 @@
-import { StrictMode, useEffect, useState } from "react";
+import { StrictMode, useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { listTemplates } from "./api/client";
+import { healthCheck, listTemplates } from "./api/client";
 import { DiagnosticsCard } from "./components/DiagnosticsCard";
 import { GenerateForm } from "./components/GenerateForm";
 import { TemplateLibrary } from "./components/TemplateLibrary";
@@ -9,11 +9,13 @@ import "./styles/md3.css";
 
 type TabId = "system" | "templates" | "brief";
 
-const TABS: { id: TabId; label: string; icon: string }[] = [
-  { id: "system", label: "System", icon: "memory" },
-  { id: "templates", label: "Templates", icon: "dashboard_customize" },
-  { id: "brief", label: "Brief", icon: "edit_note" },
+const TABS: { id: TabId; label: string }[] = [
+  { id: "system", label: "System" },
+  { id: "templates", label: "Templates" },
+  { id: "brief", label: "Brief" },
 ];
+
+const STATUS_POLL_MS = 15_000;
 
 function useTheme() {
   const [dark, setDark] = useState(() => {
@@ -38,7 +40,17 @@ function App() {
   const [, setResult] = useState<GenerateResult | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>("brief");
   const [scrolled, setScrolled] = useState(false);
+  const [apiBadge, setApiBadge] = useState("…");
   const { dark, toggle: toggleTheme } = useTheme();
+
+  const refreshApiBadge = useCallback(async () => {
+    try {
+      await healthCheck();
+      setApiBadge("API online");
+    } catch {
+      setApiBadge("Backend offline");
+    }
+  }, []);
 
   useEffect(() => {
     listTemplates()
@@ -58,8 +70,14 @@ function App() {
   }, []);
 
   useEffect(() => {
+    refreshApiBadge();
+    const id = window.setInterval(refreshApiBadge, STATUS_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [refreshApiBadge]);
+
+  useEffect(() => {
     function onScroll() {
-      setScrolled(window.scrollY > 4);
+      setScrolled(window.scrollY > 8);
     }
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
@@ -69,61 +87,50 @@ function App() {
   const selectedTemplate = templates.find((template) => template.id === templateId) ?? null;
 
   return (
-    <div className="app-layout">
-      <header className={`top-app-bar${scrolled ? " scrolled" : ""}`}>
-        <button type="button" className="icon-button" aria-label="Menu">
-          <span className="material-symbols-rounded">menu</span>
-        </button>
-        <div>
-          <h1 className="top-app-bar__title">Presentations@Carmélites</h1>
-          <span className="top-app-bar__subtitle">Local-first LLM presentation builder</span>
+    <>
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
+      <header className={`site-header${scrolled ? " is-scrolled" : ""}`} role="banner">
+        <div className="header-inner">
+          <span className="site-logo site-logo--gradient">Presentations@Carmélites</span>
+          <nav className="main-nav" aria-label="Main navigation">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`md3-nav-link${activeTab === tab.id ? " is-active" : ""}`}
+                aria-current={activeTab === tab.id ? "page" : undefined}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+          <div className="header-actions">
+            <span className="model-badge" title="API status">
+              {apiBadge}
+            </span>
+            <button
+              type="button"
+              className="md3-icon-btn"
+              onClick={toggleTheme}
+              aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              <span className="material-symbols-rounded">{dark ? "light_mode" : "dark_mode"}</span>
+            </button>
+          </div>
         </div>
-        <button
-          type="button"
-          className="icon-button"
-          onClick={toggleTheme}
-          aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-        >
-          <span className="material-symbols-rounded">{dark ? "light_mode" : "dark_mode"}</span>
-        </button>
       </header>
 
-      <nav className="nav-tabs" role="tablist" aria-label="Main navigation">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            className="nav-tab"
-            aria-selected={activeTab === tab.id}
-            aria-controls={`panel-${tab.id}`}
-            id={`tab-${tab.id}`}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            <span className="material-symbols-rounded nav-tab__icon">{tab.icon}</span>
-            <span className="nav-tab__text">{tab.label}</span>
-          </button>
-        ))}
-      </nav>
-
-      <main className="app-shell">
+      <main id="main-content" className="site-main" role="main">
         {activeTab === "system" && (
-          <div
-            className="tab-panel"
-            role="tabpanel"
-            id="panel-system"
-            aria-labelledby="tab-system"
-          >
+          <div className="tab-panel" role="tabpanel" id="panel-system" aria-labelledby="tab-system">
             <DiagnosticsCard />
           </div>
         )}
         {activeTab === "templates" && (
-          <div
-            className="tab-panel"
-            role="tabpanel"
-            id="panel-templates"
-            aria-labelledby="tab-templates"
-          >
+          <div className="tab-panel" role="tabpanel" id="panel-templates" aria-labelledby="tab-templates">
             <TemplateLibrary
               selectedId={templateId}
               onSelect={setTemplateId}
@@ -132,12 +139,7 @@ function App() {
           </div>
         )}
         {activeTab === "brief" && (
-          <div
-            className="tab-panel"
-            role="tabpanel"
-            id="panel-brief"
-            aria-labelledby="tab-brief"
-          >
+          <div className="tab-panel" role="tabpanel" id="panel-brief" aria-labelledby="tab-brief">
             <GenerateForm
               templateId={templateId}
               templateSourceType={selectedTemplate?.source_type ?? null}
@@ -148,7 +150,14 @@ function App() {
           </div>
         )}
       </main>
-    </div>
+
+      <footer className="site-footer" role="contentinfo">
+        <div className="site-footer__inner">
+          <p className="site-footer__brand">Presentations@Carmélites</p>
+          <p className="site-footer__tagline">Local-first LLM presentation builder</p>
+        </div>
+      </footer>
+    </>
   );
 }
 
