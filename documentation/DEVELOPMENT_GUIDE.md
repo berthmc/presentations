@@ -64,6 +64,13 @@ docker compose -p docker down -v
 | http://localhost:6333 | Qdrant (RAG vector store) |
 | http://localhost:8000 | vLLM OpenAI API (`--profile gpu` only) |
 
+**UI ports in Docker vs local dev:** Docker serves the built React app on **8091**. If `pptx-ui` is already running, `npm run dev` cannot bind to 8091 and Vite falls back to **5173** (live source with the same MD3 layout). After frontend changes while using Docker, rebuild the UI image — not only `pptx-api`:
+
+```powershell
+docker compose -f docker/docker-compose.yml build pptx-ui
+docker compose -f docker/docker-compose.yml up -d pptx-ui
+```
+
 Data persists in Docker volume `presentations_pptx-data` at `/data`. Qdrant uses `presentations_qdrant-data`.
 
 ### Container commands
