@@ -160,6 +160,34 @@ class TemplateRegistry:
         self._save_records(records)
         return target
 
+    def reindex(self, template_id: str) -> TemplateRecord:
+        """Re-run layout discovery for a registered template and refresh cached metadata."""
+        records = self._load_records()
+        target: TemplateRecord | None = None
+        for record in records:
+            if record.id != template_id:
+                continue
+            path = Path(record.file_path)
+            if not path.exists():
+                raise FileNotFoundError(f"Template file missing: {path}")
+            layout_profile = discover_layout(path)
+            layout_profile.source_path = str(path)
+            record.layout_profile = layout_profile
+            record.source_type = layout_profile.source_type
+            record.updated_at = datetime.now(timezone.utc)
+            target = record
+            break
+        if target is None:
+            raise KeyError(f"Template not found: {template_id}")
+        self._save_records(records)
+        logger.info(
+            "Reindexed template '{}' ({}) layouts={}",
+            target.name,
+            target.id,
+            len(target.layout_profile.layouts),
+        )
+        return target
+
     def resolve(
         self,
         *,

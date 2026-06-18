@@ -53,6 +53,15 @@ def test_resolve_missing_template_raises(registry: TemplateRegistry) -> None:
         registry.resolve(template_id="missing-id")
 
 
+def test_reindex_refreshes_layout_profile(registry: TemplateRegistry) -> None:
+    sample = Path("templates/sample-deck.md")
+    record = registry.register("Reindex Test", sample)
+    original_updated = record.updated_at
+    reindexed = registry.reindex(record.id)
+    assert reindexed.layout_profile.layouts
+    assert reindexed.updated_at >= original_updated
+
+
 def test_get_default_pptx_prefers_first_pptx_when_default_is_md(registry: TemplateRegistry) -> None:
     """get_default_pptx should return the first .pptx template when the default is .md."""
     sample = Path("templates/sample-deck.md")

@@ -229,7 +229,8 @@ export function GenerateForm({ templateId, templateSourceType, mode, onModeChang
         id="topic"
         label="Topic / details"
         multiline
-        className="textarea-md"
+        wrapperClassName="text-field--topic"
+        rows={8}
         value={topic}
         onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setTopic(event.target.value)}
       />

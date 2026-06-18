@@ -918,7 +918,10 @@ button.extended-fab:hover {
 }
 
 .text-field__input {
+  display: block;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 1rem 0.75rem 0.5rem;
   border: 1px solid var(--md-sys-color-outline);
   border-radius: var(--md-sys-shape-corner-extra-small);
@@ -966,10 +969,23 @@ button.extended-fab:hover {
   display: block;
   width: 100%;
   min-width: 100%;
+  max-width: 100%;
   min-height: 7.5rem;
   resize: vertical;
   padding-top: 1.5rem;
   box-sizing: border-box;
+}
+
+.text-field--topic {
+  width: 100%;
+  align-self: stretch;
+}
+
+.text-field--topic textarea.text-field__input {
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
+  min-height: 12rem;
 }
 
 .text-field textarea.text-field__input.textarea-md {

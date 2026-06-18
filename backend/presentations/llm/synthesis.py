@@ -9,7 +9,11 @@ from loguru import logger
 from pydantic import ValidationError
 
 from presentations.config.settings import Settings, get_settings
-from presentations.core.layout_roles import classify_layout_role, enforce_structural_layouts
+from presentations.core.layout_roles import (
+    detect_column_count,
+    enforce_structural_layouts,
+    layout_role_for_entry,
+)
 from presentations.core.schemas import (
     DeckSpec,
     DigestEntry,
@@ -87,11 +91,16 @@ Rules:
 - ph_idx values are often non-sequential (for example 0, 10, 11). Never invent placeholder indices.
 - For each slide, only use ph_idx values listed under allowed_ph_idx for that layout_index.
 - Vary layouts across slides; avoid repeating the same layout for every slide.
-- Slide 1 must use a layout with role "title" (title slide).
+- Use at least four distinct layout_index values when the template provides enough roles.
+- Prefer layouts whose summary and role match the slide content
+  (title, section, agenda, two-content, picture, chart, table, quote, closing).
+- Use picture/chart/table layouts when the template provides them;
+  do not fill picture/chart/table placeholders — template graphics are preserved automatically.
 - Insert at least one layout with role "section" between major topic groups when available.
 - Use a layout with role "two-content" for comparisons or paired concepts when available.
+- Use agenda, quote, timeline, or team layouts when the brief content fits those patterns.
+- Slide 1 must use a layout with role "title" (title slide).
 - The final slide should use a layout with role "closing" or "section" when available.
-- Prefer layouts whose role matches the slide content (title, section, two-content, content, closing).
 - Do not use markdown formatting in content strings; write plain text only (no ** or * markers).
 - Keep bullet points concise but substantive; use \\n for line breaks within a placeholder.
 - When the brief includes "Target length: N slides", produce approximately N slides.
@@ -112,6 +121,27 @@ Rules:
 """
 
 
+def _format_brand_identity(theme: dict[str, Any]) -> str:
+    """Render brand colours and fonts for synthesis prompts."""
+    if not theme:
+        return ""
+    lines = ["Brand identity (from template theme):"]
+    fonts = theme.get("fonts") or {}
+    if fonts.get("major") or fonts.get("minor"):
+        lines.append(f"- Fonts: major={fonts.get('major', 'unknown')}, minor={fonts.get('minor', 'unknown')}")
+    accents = theme.get("accents") or {}
+    if accents:
+        accent_pairs = ", ".join(f"{key}=#{value}" for key, value in sorted(accents.items()))
+        lines.append(f"- Accent colours: {accent_pairs}")
+    colors = theme.get("colors") or {}
+    if colors:
+        color_pairs = ", ".join(f"{key}=#{value}" for key, value in sorted(colors.items()))
+        lines.append(f"- Base colours: {color_pairs}")
+    if len(lines) == 1:
+        return ""
+    return "\n".join(lines)
+
+
 def _compact_layout(layout: LayoutProfile) -> dict[str, Any]:
     """Return a token-efficient layout summary for synthesis prompts."""
     return {
@@ -119,9 +149,26 @@ def _compact_layout(layout: LayoutProfile) -> dict[str, Any]:
             {
                 "layout_index": idx,
                 "name": entry.name,
-                "role": classify_layout_role(entry),
+                "role": layout_role_for_entry(entry),
+                "summary": entry.summary or "",
+                "columns": detect_column_count(entry),
+                "has_picture": entry.has_picture,
+                "has_chart": entry.has_chart,
+                "has_table": entry.has_table,
                 "allowed_ph_idx": [ph.index for ph in entry.placeholders],
-                "placeholders": [{"ph_idx": ph.index, "name": ph.name, "type": ph.type} for ph in entry.placeholders],
+                "placeholders": [
+                    {
+                        "ph_idx": ph.index,
+                        "name": ph.name,
+                        "type": ph.type,
+                        **(
+                            {"geometry_emu": {"left": ph.left, "top": ph.top, "width": ph.width, "height": ph.height}}
+                            if ph.left is not None
+                            else {}
+                        ),
+                    }
+                    for ph in entry.placeholders
+                ],
             }
             for idx, entry in sorted(layout.layouts.items())
         ]
@@ -138,8 +185,10 @@ def _build_user_prompt(
     """Build the user prompt for synthesis."""
     if layout:
         layout_json = _compact_layout(layout)
+        brand_block = _format_brand_identity(layout.theme)
     else:
         layout_json = {"layouts": "Use MD3 scratch layouts"}
+        brand_block = ""
 
     parts = [f"Brief:\n{brief}\n"]
     if source_context:
@@ -148,6 +197,8 @@ def _build_user_prompt(
             ctx = source_context[:max_source_chars]
             ctx += f"\n[Source truncated to {max_source_chars} chars for local model]"
         parts.append(f"Source document (grounding reference):\n{ctx}\n")
+    if brand_block:
+        parts.append(f"{brand_block}\n")
     parts.extend(
         [
             f"Generation mode: {mode.value}\n",

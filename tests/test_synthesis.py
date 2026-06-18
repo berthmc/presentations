@@ -78,15 +78,23 @@ def test_build_user_prompt_uses_compact_layout() -> None:
             0: LayoutEntry(
                 name="Title",
                 placeholders=[PlaceholderInfo(index=0, name="title", type="TITLE")],
+                role="title",
+                summary="Role: title. Opening or cover slide.",
             )
+        },
+        theme={
+            "fonts": {"major": "Arial", "minor": "Calibri"},
+            "accents": {"accent1": "FF0000"},
         },
     )
     prompt = _build_user_prompt("Brief text", layout, GenerationMode.TEMPLATE)
     assert '"allowed_ph_idx"' in prompt
     assert '"ph_idx": 0' in prompt
     assert '"role"' in prompt
+    assert '"summary"' in prompt
+    assert "Brand identity" in prompt
+    assert "major=Arial" in prompt
     assert "source_path" not in prompt
-    assert "theme" not in prompt
 
 
 def test_compact_layout_emits_role_hints() -> None:
