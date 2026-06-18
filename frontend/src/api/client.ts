@@ -25,6 +25,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export function healthCheck(): Promise<{ status: string }> {
+  return request("/health");
+}
+
 export function getDiagnostics(): Promise<Diagnostics> {
   return request("/diagnostics");
 }
