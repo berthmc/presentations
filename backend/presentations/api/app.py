@@ -2,14 +2,20 @@
 
 import asyncio
 import shutil
+import time
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from loguru import logger
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 
 from presentations.config.logging_config import configure_logging
+from presentations.config.pipeline_logging import resolve_run_id
 from presentations.config.settings import get_settings
 from presentations.core.profiles import run_hardware_diagnostics
 from presentations.core.schemas import GenerateRequest, GenerationMode
@@ -45,6 +51,26 @@ def _resolve_within(base: Path, candidate: Path) -> Path:
         raise HTTPException(status_code=400, detail="Invalid path")
     return target
 
+
+class LoggingMiddleware(BaseHTTPMiddleware):
+    """Log HTTP requests with method, path, status, and latency via loguru."""
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        start = time.perf_counter()
+        response = await call_next(request)
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.info(
+            "{} {} -> {} ({:.0f}ms)",
+            request.method,
+            request.url.path,
+            response.status_code,
+            elapsed_ms,
+        )
+        return response
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -57,6 +83,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(LoggingMiddleware)
 
 
 @app.on_event("startup")
@@ -183,6 +210,7 @@ async def ingest_pdf(file: UploadFile = File(...)) -> dict[str, str]:
     if suffix != ".pdf":
         raise HTTPException(status_code=400, detail="Only .pdf files are supported")
 
+    logger.info("PDF ingestion started: {}", file.filename)
     settings = get_settings()
     staging = settings.uploads_dir / f"brief_{file.filename}"
     try:
@@ -223,6 +251,11 @@ async def _enqueue_generation(request: GenerateRequest) -> JSONResponse:
     """Create a generation job and schedule background execution."""
     store = get_job_store()
     job_id = await store.create()
+    logger.info(
+        "Job {} enqueued — brief={!r}",
+        resolve_run_id(job_id),
+        request.brief[:60],
+    )
     asyncio.create_task(_run_generation_job(job_id, request))
     return JSONResponse(
         status_code=202,
@@ -243,7 +276,15 @@ async def get_job(job_id: str) -> dict:
     record = await store.get(job_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
-    return store.to_status_response(record).model_dump()
+    response = store.to_status_response(record)
+    stage = response.stage.value if response.stage else "-"
+    logger.info(
+        "Job {} polled: status={} stage={}",
+        resolve_run_id(job_id),
+        response.status.value,
+        stage,
+    )
+    return response.model_dump()
 
 
 @app.get("/jobs/{job_id}/result")
@@ -260,6 +301,7 @@ async def get_job_result(job_id: str) -> dict:
             status_code=409,
             detail=f"Job is not complete (status={record.status.value})",
         )
+    logger.info("Job {} result fetched", resolve_run_id(job_id))
     return record.result.model_dump()
 
 
@@ -319,6 +361,7 @@ async def qa_render(pptx_path: str) -> dict:
     path = _resolve_within(settings.output_dir, Path(pptx_path))
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"File not found: {pptx_path}")
+    logger.info("QA render requested for {}", path.name)
     try:
         report = await run_qa_loop(path)
         return report.model_dump()
@@ -359,17 +402,30 @@ def create_app() -> FastAPI:
     return app
 
 
+def _api_reload_dirs() -> list[str]:
+    """Directories safe for uvicorn reload watching.
+
+    Docker mounts read-only paths under /app (documentation, credentials) that
+    break watchfiles with IO errors when the whole tree is watched.
+    """
+    backend_root = Path(__file__).resolve().parents[2]
+    return [str(backend_root)]
+
+
 def main() -> None:
     """Run the API server."""
     import uvicorn
 
     settings = get_settings()
     configure_logging(settings.log_level)
+    reload = settings.app_env == "development"
     uvicorn.run(
         "presentations.api.app:app",
         host=settings.api_host,
         port=settings.api_port,
-        reload=settings.app_env == "development",
+        reload=reload,
+        reload_dirs=_api_reload_dirs() if reload else None,
+        access_log=False,
     )
 
 
