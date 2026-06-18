@@ -11,7 +11,6 @@ from pydantic import ValidationError
 from presentations.config.settings import Settings, get_settings
 from presentations.core.layout_roles import (
     detect_column_count,
-    enforce_structural_layouts,
     layout_role_for_entry,
 )
 from presentations.core.schemas import (
@@ -22,7 +21,10 @@ from presentations.core.schemas import (
     SourceDigest,
 )
 from presentations.llm.base import LLMProvider
-from presentations.llm.layout_validate import validate_deck_against_layout
+from presentations.llm.layout_validate import (
+    layout_validation_errors,
+    sanitize_deck_spec,
+)
 from presentations.llm.router import LLMRouter
 
 DECK_SYNTHESIS_JSON_SCHEMA: dict[str, Any] = {
@@ -346,14 +348,25 @@ def _payload_to_deck(
     mode: GenerationMode,
     layout: LayoutProfile | None,
 ) -> DeckSpec:
-    """Validate LLM payload and enforce layout constraints for template mode."""
+    """Validate LLM payload and enforce layout constraints for template mode.
+
+    Invalid layout indices and placeholder indices are sanitized in-place rather
+    than raising, so a slow local model does not waste a full retry on ph_idx
+    errors it is likely to repeat.  Pydantic ValidationError (broken JSON
+    schema) is still propagated so the retry loop can issue a corrective prompt.
+    """
     if title:
         payload["title"] = title
     payload["mode"] = mode.value
     deck = DeckSpec.model_validate(payload)
     if layout and mode == GenerationMode.TEMPLATE:
-        validate_deck_against_layout(deck, layout)
-        deck = enforce_structural_layouts(deck, layout)
+        errors = layout_validation_errors(deck, layout)
+        if errors:
+            logger.warning(
+                "Deck layout violations detected — sanitizing instead of retrying: {}",
+                "; ".join(errors),
+            )
+        deck = sanitize_deck_spec(deck, layout)
     return deck
 
 
