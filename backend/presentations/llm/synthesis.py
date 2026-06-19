@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import httpx
 from loguru import logger
 from pydantic import ValidationError
 
@@ -26,6 +27,9 @@ from presentations.llm.layout_validate import (
     sanitize_deck_spec,
 )
 from presentations.llm.router import LLMRouter
+
+_PROVIDER_VALIDATION_ERRORS = (ValidationError, ValueError, KeyError)
+_PROVIDER_TRANSIENT_ERRORS = (TimeoutError, httpx.TimeoutException, httpx.TransportError, RuntimeError)
 
 DECK_SYNTHESIS_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -299,22 +303,34 @@ async def digest_source_context(
         raise ValueError("No synthesis providers available for digest phase")
 
     chunks = _chunk_text(source_context, settings.digest_chunk_chars)
-    provider = providers[0]
     digests: list[SourceDigest] = []
 
     for index, chunk in enumerate(chunks, start=1):
-        try:
-            digest = await _digest_chunk_with_provider(provider, brief=brief, source_chunk=chunk)
-            digests.append(digest)
-            logger.info(
-                "Digest chunk {}/{} produced {} facts via {}",
-                index,
-                len(chunks),
-                len(digest.facts),
-                provider.name,
-            )
-        except (ValidationError, ValueError, KeyError) as exc:
-            logger.warning("Digest chunk {} failed: {}", index, exc)
+        chunk_digest: SourceDigest | None = None
+        for provider_index, provider in enumerate(providers):
+            if provider_index > 0:
+                logger.warning(
+                    "Falling back to {} for digest chunk {}/{}",
+                    provider.name,
+                    index,
+                    len(chunks),
+                )
+            try:
+                chunk_digest = await _digest_chunk_with_provider(provider, brief=brief, source_chunk=chunk)
+                logger.info(
+                    "Digest chunk {}/{} produced {} facts via {}",
+                    index,
+                    len(chunks),
+                    len(chunk_digest.facts),
+                    provider.name,
+                )
+                break
+            except _PROVIDER_TRANSIENT_ERRORS as exc:
+                logger.warning("Digest chunk {} with {} aborted: {}", index, provider.name, exc)
+            except _PROVIDER_VALIDATION_ERRORS as exc:
+                logger.warning("Digest chunk {} with {} failed: {}", index, provider.name, exc)
+        if chunk_digest is None:
+            logger.warning("Digest chunk {}/{} failed on all providers", index, len(chunks))
 
     return _merge_digests(digests)
 
@@ -410,7 +426,9 @@ async def _generate_with_provider(
             else:
                 payload = await provider.generate_json(SYNTHESIS_SYSTEM_PROMPT, prompt)
             return _payload_to_deck(payload, title=title, mode=mode, layout=layout)
-        except (ValidationError, ValueError, KeyError) as exc:
+        except _PROVIDER_TRANSIENT_ERRORS:
+            raise
+        except _PROVIDER_VALIDATION_ERRORS as exc:
             last_error = exc
             logger.warning(
                 "Deck synthesis attempt {} with {} failed: {}",
@@ -493,7 +511,7 @@ async def synthesize_deck_spec(
                 getattr(provider, "model", getattr(provider, "synthesis_model", "unknown")),
             )
             return deck
-        except (ValidationError, ValueError, KeyError) as exc:
+        except (*_PROVIDER_VALIDATION_ERRORS, *_PROVIDER_TRANSIENT_ERRORS) as exc:
             last_error = exc
             if provider_index < len(providers) - 1:
                 continue

@@ -71,9 +71,9 @@ class OllamaProvider(LLMProvider):
                 response.raise_for_status()
                 body = response.json()
                 content = body["message"]["content"]
-        except httpx.ReadTimeout as exc:
+        except httpx.TimeoutException as exc:
             logger.error(
-                "Ollama read timeout after {}s generating JSON with model={}",
+                "Ollama timeout after {}s generating JSON with model={}",
                 self._timeout_generate.read,
                 self.synthesis_model,
             )
@@ -81,6 +81,9 @@ class OllamaProvider(LLMProvider):
                 f"Ollama did not respond within {self._timeout_generate.read}s. "
                 "Increase OLLAMA_READ_TIMEOUT_GENERATE or switch to a faster model."
             ) from exc
+        except httpx.TransportError as exc:
+            logger.error("Ollama transport error generating JSON with model={}: {}", self.synthesis_model, exc)
+            raise RuntimeError(f"Ollama unreachable at {self.host}: {exc}") from exc
         duration_s = time.perf_counter() - started
         try:
             parsed = parse_json_content(content)
@@ -127,9 +130,9 @@ class OllamaProvider(LLMProvider):
                 response = await client.post(f"{self.host}/api/chat", json=payload)
                 response.raise_for_status()
                 content = response.json()["message"]["content"]
-        except httpx.ReadTimeout as exc:
+        except httpx.TimeoutException as exc:
             logger.error(
-                "Ollama read timeout after {}s during VLM audit with model={}",
+                "Ollama timeout after {}s during VLM audit with model={}",
                 self._timeout_vlm.read,
                 self.vlm_model,
             )
@@ -137,6 +140,9 @@ class OllamaProvider(LLMProvider):
                 f"Ollama VLM did not respond within {self._timeout_vlm.read}s. "
                 "Increase OLLAMA_READ_TIMEOUT_VLM or switch to a faster model."
             ) from exc
+        except httpx.TransportError as exc:
+            logger.error("Ollama transport error during VLM audit with model={}: {}", self.vlm_model, exc)
+            raise RuntimeError(f"Ollama unreachable at {self.host}: {exc}") from exc
         return parse_json_content(content)
 
     @property

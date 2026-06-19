@@ -11,8 +11,8 @@ from presentations.llm.ollama_provider import OllamaProvider
 from presentations.llm.vllm_provider import VLLMProvider
 
 _CLOUD_DISABLED_MSG = (
-    "Ollama is unreachable and cloud LLM is disabled. "
-    "Enable 'Allow Gemini' in the UI or check that Ollama is running."
+    "Local LLM is unreachable and cloud AI is disabled. "
+    "Enable Cloud AI in the UI or start Ollama/vLLM."
 )
 
 
