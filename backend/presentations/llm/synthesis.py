@@ -31,6 +31,20 @@ from presentations.llm.router import LLMRouter
 _PROVIDER_VALIDATION_ERRORS = (ValidationError, ValueError, KeyError)
 _PROVIDER_TRANSIENT_ERRORS = (TimeoutError, httpx.TimeoutException, httpx.TransportError, RuntimeError)
 
+
+def _format_synthesis_failure(
+    last_error: Exception | None,
+    *,
+    provider_count: int,
+    allow_cloud: bool,
+) -> str:
+    """Build an actionable synthesis failure message."""
+    detail = str(last_error) if last_error else "unknown error"
+    message = f"Failed to synthesize deck after trying {provider_count} provider(s): {detail}"
+    if isinstance(last_error, TimeoutError) and not allow_cloud:
+        message += " Enable Cloud AI in the UI, use a faster local model, or increase OLLAMA_READ_TIMEOUT_GENERATE."
+    return message
+
 DECK_SYNTHESIS_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -158,10 +172,22 @@ def _format_brand_identity(theme: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _compact_layout(layout: LayoutProfile) -> dict[str, Any]:
+def _compact_layout(layout: LayoutProfile, *, include_geometry: bool = True) -> dict[str, Any]:
     """Return a token-efficient layout summary for synthesis prompts."""
-    return {
-        "layouts": [
+    placeholders: list[dict[str, Any]] = []
+    for idx, entry in sorted(layout.layouts.items()):
+        ph_entries: list[dict[str, Any]] = []
+        for ph in entry.placeholders:
+            ph_dict: dict[str, Any] = {"ph_idx": ph.index, "name": ph.name, "type": ph.type}
+            if include_geometry and ph.left is not None:
+                ph_dict["geometry_emu"] = {
+                    "left": ph.left,
+                    "top": ph.top,
+                    "width": ph.width,
+                    "height": ph.height,
+                }
+            ph_entries.append(ph_dict)
+        placeholders.append(
             {
                 "layout_index": idx,
                 "name": entry.name,
@@ -172,23 +198,10 @@ def _compact_layout(layout: LayoutProfile) -> dict[str, Any]:
                 "has_chart": entry.has_chart,
                 "has_table": entry.has_table,
                 "allowed_ph_idx": [ph.index for ph in entry.placeholders],
-                "placeholders": [
-                    {
-                        "ph_idx": ph.index,
-                        "name": ph.name,
-                        "type": ph.type,
-                        **(
-                            {"geometry_emu": {"left": ph.left, "top": ph.top, "width": ph.width, "height": ph.height}}
-                            if ph.left is not None
-                            else {}
-                        ),
-                    }
-                    for ph in entry.placeholders
-                ],
+                "placeholders": ph_entries,
             }
-            for idx, entry in sorted(layout.layouts.items())
-        ]
-    }
+        )
+    return {"layouts": placeholders}
 
 
 def _build_user_prompt(
@@ -197,10 +210,12 @@ def _build_user_prompt(
     mode: GenerationMode,
     source_context: str | None = None,
     max_source_chars: int | None = None,
+    *,
+    include_geometry: bool = True,
 ) -> str:
     """Build the user prompt for synthesis."""
     if layout:
-        layout_json = _compact_layout(layout)
+        layout_json = _compact_layout(layout, include_geometry=include_geometry)
         brand_block = _format_brand_identity(layout.theme)
     else:
         layout_json = {"layouts": "Use MD3 scratch layouts"}
@@ -411,7 +426,14 @@ async def _generate_with_provider(
     from presentations.llm.ollama_provider import OllamaProvider
 
     max_src = settings.ollama_max_source_context_chars if isinstance(provider, OllamaProvider) else None
-    base_prompt = _build_user_prompt(brief, layout, mode, source_context, max_source_chars=max_src)
+    base_prompt = _build_user_prompt(
+        brief,
+        layout,
+        mode,
+        source_context,
+        max_source_chars=max_src,
+        include_geometry=not isinstance(provider, OllamaProvider),
+    )
 
     last_error: Exception | None = None
     prompt = base_prompt
@@ -516,7 +538,11 @@ async def synthesize_deck_spec(
             if provider_index < len(providers) - 1:
                 continue
             raise ValueError(
-                f"Failed to synthesize deck after trying {len(providers)} provider(s)"
+                _format_synthesis_failure(
+                    last_error,
+                    provider_count=len(providers),
+                    allow_cloud=allow_cloud,
+                )
             ) from last_error
 
     raise ValueError("Failed to synthesize deck: no synthesis providers available") from last_error

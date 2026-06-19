@@ -86,12 +86,19 @@ async def pipeline_stage(run_id: str, stage: PipelineStage, revision: int = 0):
         logger.info("Pipeline stage {} started", marker)
         started = time.perf_counter()
         metrics: dict[str, Any] = {}
+        failed = False
         try:
             yield metrics
+        except Exception:
+            failed = True
+            raise
         finally:
             duration = time.perf_counter() - started
             metrics["duration_s"] = round(duration, 2)
-            logger.info("Pipeline stage {} complete {}", marker, format_metrics(metrics))
+            if failed:
+                logger.error("Pipeline stage {} failed {}", marker, format_metrics(metrics))
+            else:
+                logger.info("Pipeline stage {} complete {}", marker, format_metrics(metrics))
 
 
 def log_llm_call(
