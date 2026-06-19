@@ -44,9 +44,9 @@ cd frontend; npm run dev    # http://localhost:8091
 ### Docker
 
 ```powershell
-docker compose -f docker/docker-compose.yml up --build
+.\scripts\start-pptx-stack.ps1 -Detached
 # Optional GPU planner:
-docker compose -f docker/docker-compose.yml --profile gpu up --build
+.\scripts\start-pptx-stack.ps1 -Detached -Profile gpu
 ```
 
 - API: http://localhost:8090 (OpenAPI at `/docs`)

@@ -143,3 +143,165 @@ def test_sanitize_deck_spec_enforces_title_and_closing_layouts() -> None:
     sanitized = sanitize_deck_spec(deck, LAYOUT)
     assert sanitized.slides[0].layout_index == 1
     assert sanitized.slides[-1].layout_index == 20
+
+
+def test_sanitize_replaces_generic_title_slide_with_deck_title() -> None:
+    layout = LayoutProfile(
+        source_path="/tmp/template.pptx",
+        source_type="pptx",
+        layouts={
+            0: LayoutEntry(
+                name="cover page option 1",
+                placeholders=[
+                    PlaceholderInfo(index=0, name="title", type="TITLE"),
+                    PlaceholderInfo(index=1, name="body", type="BODY"),
+                ],
+                role="title",
+            ),
+            14: LayoutEntry(
+                name="Title and body text one column",
+                placeholders=[
+                    PlaceholderInfo(index=0, name="title", type="TITLE"),
+                    PlaceholderInfo(index=11, name="body", type="BODY"),
+                ],
+                role="content",
+            ),
+            20: LayoutEntry(
+                name="Chapter page option 1",
+                placeholders=[PlaceholderInfo(index=0, name="title", type="TITLE")],
+                role="section",
+            ),
+        },
+    )
+    deck = DeckSpec(
+        title="MiFID II: Protecting EU Retail Investors",
+        mode=GenerationMode.TEMPLATE,
+        slides=[
+            SlideSpec(
+                layout_index=0,
+                mappings=[
+                    PlaceholderMapping(ph_idx=0, content="Title Slide"),
+                    PlaceholderMapping(ph_idx=1, content="Transparency, Best execution"),
+                ],
+            ),
+            SlideSpec(
+                layout_index=14,
+                mappings=[PlaceholderMapping(ph_idx=0, content="Overview")],
+            ),
+            SlideSpec(
+                layout_index=20,
+                mappings=[PlaceholderMapping(ph_idx=0, content="Thank you")],
+            ),
+        ],
+    )
+    sanitized = sanitize_deck_spec(deck, layout)
+    title_mapping = next(mapping for mapping in sanitized.slides[0].mappings if mapping.ph_idx == 0)
+    assert title_mapping.content == deck.title
+
+
+def test_sanitize_distributes_multicolumn_content() -> None:
+    layout = LayoutProfile(
+        source_path="/tmp/template.pptx",
+        source_type="pptx",
+        layouts={
+            9: LayoutEntry(
+                name="Title and body text two columns",
+                placeholders=[
+                    PlaceholderInfo(index=0, name="Title", type="TITLE", left=0),
+                    PlaceholderInfo(index=1, name="Left", type="OBJECT (7)", left=100, width=400),
+                    PlaceholderInfo(index=10, name="Right", type="OBJECT (7)", left=600, width=400),
+                ],
+                role="two-content",
+            ),
+        },
+    )
+    deck = DeckSpec(
+        title="Comparison Deck",
+        mode=GenerationMode.TEMPLATE,
+        slides=[
+            SlideSpec(
+                layout_index=9,
+                mappings=[
+                    PlaceholderMapping(ph_idx=0, content="Best Execution"),
+                    PlaceholderMapping(
+                        ph_idx=1,
+                        content="Left obligation one\nLeft obligation two\nRight obligation one\nRight obligation two",
+                    ),
+                ],
+            )
+        ],
+    )
+    sanitized = sanitize_deck_spec(deck, layout)
+    body_mappings = {
+        mapping.ph_idx: mapping.content
+        for mapping in sanitized.slides[0].mappings
+        if mapping.ph_idx in {1, 10}
+    }
+    assert 1 in body_mappings
+    assert 10 in body_mappings
+    assert body_mappings[1]
+    assert body_mappings[10]
+
+
+def test_sanitize_remaps_interior_body_off_section_layout() -> None:
+    layout = LayoutProfile(
+        source_path="/tmp/template.pptx",
+        source_type="pptx",
+        layouts={
+            1: LayoutEntry(
+                name="Title",
+                placeholders=[PlaceholderInfo(index=0, name="title", type="TITLE")],
+                role="title",
+            ),
+            5: LayoutEntry(
+                name="Chapter page option 2",
+                placeholders=[
+                    PlaceholderInfo(index=0, name="title", type="TITLE"),
+                    PlaceholderInfo(index=11, name="body", type="BODY"),
+                ],
+                role="section",
+            ),
+            14: LayoutEntry(
+                name="Content",
+                placeholders=[
+                    PlaceholderInfo(index=0, name="title", type="TITLE"),
+                    PlaceholderInfo(index=11, name="body", type="BODY"),
+                ],
+                role="content",
+            ),
+            20: LayoutEntry(
+                name="Chapter page option 1",
+                placeholders=[PlaceholderInfo(index=0, name="title", type="TITLE")],
+                role="section",
+            ),
+        },
+    )
+    deck = DeckSpec(
+        title="Test",
+        mode=GenerationMode.TEMPLATE,
+        slides=[
+            SlideSpec(
+                layout_index=1,
+                mappings=[PlaceholderMapping(ph_idx=0, content="Opening")],
+            ),
+            SlideSpec(
+                layout_index=5,
+                mappings=[
+                    PlaceholderMapping(ph_idx=0, content="Product Governance"),
+                    PlaceholderMapping(
+                        ph_idx=11,
+                        content=(
+                            "Involves the lifecycle management of financial products and ensures "
+                            "alignment with investor needs."
+                        ),
+                    ),
+                ],
+            ),
+            SlideSpec(
+                layout_index=20,
+                mappings=[PlaceholderMapping(ph_idx=0, content="Thanks")],
+            ),
+        ],
+    )
+    sanitized = sanitize_deck_spec(deck, layout)
+    assert sanitized.slides[1].layout_index == 14

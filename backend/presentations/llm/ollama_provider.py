@@ -26,6 +26,33 @@ def parse_json_content(content: str) -> dict[str, Any]:
         raise
 
 
+async def _read_ollama_chat_stream(
+    client: httpx.AsyncClient,
+    url: str,
+    payload: dict[str, Any],
+) -> tuple[str, dict[str, Any]]:
+    """Consume an Ollama streaming chat response and return content plus final metadata."""
+    stream_payload = {**payload, "stream": True}
+    content_parts: list[str] = []
+    final_chunk: dict[str, Any] = {}
+
+    async with client.stream("POST", url, json=stream_payload) as response:
+        response.raise_for_status()
+        async for line in response.aiter_lines():
+            if not line.strip():
+                continue
+            chunk = json.loads(line)
+            message = chunk.get("message") or {}
+            piece = message.get("content")
+            if piece:
+                content_parts.append(piece)
+            if chunk.get("done"):
+                final_chunk = chunk
+                break
+
+    return "".join(content_parts), final_chunk
+
+
 class OllamaProvider(LLMProvider):
     """Local inference via Ollama HTTP API."""
 
@@ -56,7 +83,6 @@ class OllamaProvider(LLMProvider):
                 {"role": "user", "content": user_prompt},
             ],
             "format": json_schema if json_schema is not None else "json",
-            "stream": False,
             "options": {
                 "temperature": self.temperature,
                 "num_predict": self.num_predict,
@@ -65,15 +91,17 @@ class OllamaProvider(LLMProvider):
         }
         prompt_chars = len(system_prompt) + len(user_prompt)
         started = time.perf_counter()
+        body: dict[str, Any] = {}
         try:
             async with httpx.AsyncClient(timeout=self._timeout_generate) as client:
-                response = await client.post(f"{self.host}/api/chat", json=payload)
-                response.raise_for_status()
-                body = response.json()
-                content = body["message"]["content"]
-        except httpx.ReadTimeout as exc:
+                content, body = await _read_ollama_chat_stream(
+                    client,
+                    f"{self.host}/api/chat",
+                    payload,
+                )
+        except httpx.TimeoutException as exc:
             logger.error(
-                "Ollama read timeout after {}s generating JSON with model={}",
+                "Ollama timeout after {}s generating JSON with model={}",
                 self._timeout_generate.read,
                 self.synthesis_model,
             )
@@ -81,6 +109,9 @@ class OllamaProvider(LLMProvider):
                 f"Ollama did not respond within {self._timeout_generate.read}s. "
                 "Increase OLLAMA_READ_TIMEOUT_GENERATE or switch to a faster model."
             ) from exc
+        except httpx.TransportError as exc:
+            logger.error("Ollama transport error generating JSON with model={}: {}", self.synthesis_model, exc)
+            raise RuntimeError(f"Ollama unreachable at {self.host}: {exc}") from exc
         duration_s = time.perf_counter() - started
         try:
             parsed = parse_json_content(content)
@@ -120,16 +151,21 @@ class OllamaProvider(LLMProvider):
                 }
             ],
             "format": "json",
-            "stream": False,
+            "options": {
+                "temperature": self.temperature,
+                "num_predict": self.num_predict,
+            },
         }
         try:
             async with httpx.AsyncClient(timeout=self._timeout_vlm) as client:
-                response = await client.post(f"{self.host}/api/chat", json=payload)
-                response.raise_for_status()
-                content = response.json()["message"]["content"]
-        except httpx.ReadTimeout as exc:
+                content, _body = await _read_ollama_chat_stream(
+                    client,
+                    f"{self.host}/api/chat",
+                    payload,
+                )
+        except httpx.TimeoutException as exc:
             logger.error(
-                "Ollama read timeout after {}s during VLM audit with model={}",
+                "Ollama timeout after {}s during VLM audit with model={}",
                 self._timeout_vlm.read,
                 self.vlm_model,
             )
@@ -137,6 +173,9 @@ class OllamaProvider(LLMProvider):
                 f"Ollama VLM did not respond within {self._timeout_vlm.read}s. "
                 "Increase OLLAMA_READ_TIMEOUT_VLM or switch to a faster model."
             ) from exc
+        except httpx.TransportError as exc:
+            logger.error("Ollama transport error during VLM audit with model={}: {}", self.vlm_model, exc)
+            raise RuntimeError(f"Ollama unreachable at {self.host}: {exc}") from exc
         return parse_json_content(content)
 
     @property

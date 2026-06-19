@@ -123,7 +123,7 @@ The Planner always produces a strict **`DeckSpec`** JSON (`layout_index`, `ph_id
 
 Model catalog for the UI: `GET /models` — see [`llm/catalog.py`](../backend/presentations/llm/catalog.py).
 
-Cloud LLM is **opt-in per request** (`allow_cloud`); operator default `ALLOW_CLOUD_LLM_DEFAULT` applies only when the UI does not override.
+Cloud LLM is **opt-in per request** only (`allow_cloud=true` in the API or Cloud AI toggle in the UI).
 
 ## Template library
 

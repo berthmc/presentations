@@ -163,6 +163,60 @@ async def test_synthesize_falls_back_to_gemini_after_ollama_fails() -> None:
 
 
 @pytest.mark.asyncio
+async def test_synthesize_falls_back_to_gemini_after_ollama_timeout() -> None:
+    deck_payload = {
+        "title": "Timeout Fallback Deck",
+        "mode": "scratch",
+        "slides": [{"layout_index": 0, "mappings": [{"ph_idx": 0, "content": "Hello"}]}],
+    }
+    ollama = MagicMock()
+    ollama.name = "ollama"
+    ollama.generate_json = AsyncMock(side_effect=TimeoutError("Ollama did not respond within 300s"))
+
+    gemini = MagicMock()
+    gemini.name = "gemini"
+    gemini.model = "gemini-2.5-pro"
+    gemini.generate_json = AsyncMock(return_value=deck_payload)
+
+    router = MagicMock()
+    router.get_synthesis_providers = AsyncMock(return_value=[ollama, gemini])
+
+    with patch("presentations.llm.synthesis.LLMRouter", return_value=router):
+        deck = await synthesize_deck_spec(
+            brief="Topic: Test deck",
+            mode=GenerationMode.SCRATCH,
+            allow_cloud=True,
+            max_retries=0,
+        )
+
+    assert isinstance(deck, DeckSpec)
+    assert deck.title == "Timeout Fallback Deck"
+    assert ollama.generate_json.await_count == 1
+    assert gemini.generate_json.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_synthesize_timeout_message_hints_cloud_opt_in() -> None:
+    ollama = MagicMock()
+    ollama.name = "ollama"
+    ollama.generate_json = AsyncMock(
+        side_effect=TimeoutError("Ollama did not respond within 300.0s. Increase OLLAMA_READ_TIMEOUT_GENERATE.")
+    )
+
+    router = MagicMock()
+    router.get_synthesis_providers = AsyncMock(return_value=[ollama])
+
+    with patch("presentations.llm.synthesis.LLMRouter", return_value=router):
+        with pytest.raises(ValueError, match="Enable Cloud AI in the UI"):
+            await synthesize_deck_spec(
+                brief="Topic: Test deck",
+                mode=GenerationMode.SCRATCH,
+                allow_cloud=False,
+                max_retries=0,
+            )
+
+
+@pytest.mark.asyncio
 async def test_synthesize_raises_when_all_providers_fail() -> None:
     failing = MagicMock()
     failing.name = "ollama"

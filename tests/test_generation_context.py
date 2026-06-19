@@ -6,7 +6,10 @@ import pytest
 
 from presentations.core.schemas import GenerateRequest, GenerationMode, LayoutProfile
 from presentations.core.templates import ResolvedTemplate
-from presentations.services.generation_context import resolve_generation_context
+from presentations.services.generation_context import (
+    resolve_allow_cloud,
+    resolve_generation_context,
+)
 
 
 def test_template_mode_without_id_uses_default_pptx(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -75,3 +78,12 @@ def test_template_mode_without_pptx_template_raises(monkeypatch: pytest.MonkeyPa
     request = GenerateRequest(brief="Quarterly update", mode=GenerationMode.TEMPLATE, run_qa=False)
     with pytest.raises(ValueError, match="template_id or template_path required"):
         resolve_generation_context(request)
+
+
+def test_resolve_allow_cloud_requires_explicit_user_opt_in() -> None:
+    """Cloud LLM is only used when the request explicitly opts in."""
+    request = GenerateRequest(brief="Update", run_qa=False, allow_cloud=False)
+    assert resolve_allow_cloud(request) is False
+
+    request_opted_in = GenerateRequest(brief="Update", run_qa=False, allow_cloud=True)
+    assert resolve_allow_cloud(request_opted_in) is True

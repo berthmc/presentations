@@ -30,7 +30,7 @@ pptx-api                    # http://localhost:8090
 cd frontend; npm run dev    # http://localhost:8091  (proxies /api → :8090)
 ```
 
-Optional: start Ollama and pull models:
+Optional for **non-Docker** dev: start Ollama on the host and pull models:
 
 ```powershell
 ollama pull qwen2.5:7b
@@ -41,9 +41,21 @@ ollama pull qwen2.5vl:7b   # VLM QA (slide visual audit)
 
 ## Docker
 
+On **Windows**, start the host Ollama client then bring up the stack (recommended):
+
+```powershell
+.\scripts\start-pptx-stack.ps1 -Detached
+```
+
+Or manually:
+
 ```powershell
 docker compose -f docker/docker-compose.yml up --build
 ```
+
+`pptx-api` connects to your **Windows Ollama** at `http://host.docker.internal:11434` and waits for it on startup.
+
+This starts **Ollama** (`ollama` + one-shot `ollama-init` model pull), **pptx-api**, **pptx-ui**, and **Qdrant**. API uses `OLLAMA_HOST=http://ollama:11434` inside the stack.
 
 With NVIDIA GPU for vLLM planner (optional):
 
@@ -61,6 +73,7 @@ docker compose -p docker down -v
 |-----|---------|
 | http://localhost:8090 | API + MCP at `/mcp` |
 | http://localhost:8091 | React UI (nginx, `/api` proxy) |
+| http://localhost:11434 | Ollama (Docker stack) |
 | http://localhost:6333 | Qdrant (RAG vector store) |
 | http://localhost:8000 | vLLM OpenAI API (`--profile gpu` only) |
 
@@ -94,7 +107,6 @@ Copy from [`.env.example`](../.env.example). Key settings:
 | `OLLAMA_NUM_CTX` | `32768` | Ollama context window (`num_ctx`); raise if prompts overflow |
 | `OLLAMA_TEMPERATURE` | `0.1` | Ollama synthesis temperature |
 | `OLLAMA_MAX_SOURCE_CONTEXT_CHARS` | `32000` | Max PDF source text chars in Ollama prompts (Gemini uncapped) |
-| `ALLOW_CLOUD_LLM_DEFAULT` | `false` | Operator default for cloud LLM; users opt in per-request via UI `allow_cloud` |
 | `HARDWARE_PROFILE` | `auto` | `integrated`, `discrete`, or `auto` |
 | `QA_MAX_ITERATIONS` | `3` | Visual QA retry limit |
 | `GOOGLE_CLOUD_PROJECT` | — | Gemini/Vertex fallback |

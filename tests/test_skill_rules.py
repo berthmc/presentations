@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from pptx import Presentation
 from pptx.enum.dml import MSO_THEME_COLOR
+from pptx.enum.text import MSO_AUTO_SIZE
 from presentations.agents.assembler import compile_from_template
 from presentations.agents.skill_rules import (
     check_leftover_placeholder_text,
@@ -60,6 +61,15 @@ def test_fill_placeholder_with_rules_applies_theme_accent(tmp_path: Path) -> Non
     assert "**" not in placeholder.text
     assert paragraph.runs[0].font.bold is True
     assert paragraph.runs[0].font.color.theme_color == MSO_THEME_COLOR.ACCENT_3
+
+
+def test_fill_placeholder_with_rules_enables_autofit_for_body(tmp_path: Path) -> None:
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[1])
+    placeholder = slide.placeholders[1]
+    fill_placeholder_with_rules(placeholder, "Concise bullet one\nConcise bullet two", is_title=False)
+    assert placeholder.text_frame.word_wrap is True
+    assert placeholder.text_frame.auto_size == MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
 
 
 def test_check_leftover_placeholder_text_detects_lorem() -> None:

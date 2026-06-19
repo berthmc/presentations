@@ -1,6 +1,7 @@
 """Tests for Ollama provider JSON parsing and request payload."""
 
 import json
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -24,23 +25,44 @@ def test_parse_json_content_invalid_raises() -> None:
         parse_json_content("{")
 
 
+def _stream_lines(*lines: str):
+    captured: dict[str, object] = {}
+
+    @asynccontextmanager
+    async def mock_stream(*_args, **kwargs):
+        captured["json"] = kwargs.get("json")
+        response = MagicMock()
+        response.raise_for_status = MagicMock()
+
+        async def aiter_lines():
+            for line in lines:
+                yield line
+
+        response.aiter_lines = aiter_lines
+        yield response
+
+    mock_stream.captured = captured
+    return mock_stream
+
+
 @pytest.mark.asyncio
-async def test_generate_json_uses_schema_and_options() -> None:
+async def test_generate_json_uses_schema_and_streaming() -> None:
     provider = OllamaProvider(synthesis_model="qwen2.5:3b")
     schema = {"type": "object", "properties": {"title": {"type": "string"}}, "required": ["title"]}
-    response_body = {
-        "message": {"content": '{"title": "Test", "slides": []}'},
-        "done_reason": "stop",
-        "eval_count": 12,
-        "prompt_eval_count": 34,
-    }
+    stream_line = json.dumps(
+        {
+            "message": {"content": '{"title": "Test", "slides": []}'},
+            "done": True,
+            "done_reason": "stop",
+            "eval_count": 12,
+            "prompt_eval_count": 34,
+        }
+    )
 
     with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_stream = _stream_lines(stream_line)
         mock_client = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = response_body
-        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client.stream = mock_stream
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
         mock_client_cls.return_value = mock_client
@@ -48,8 +70,8 @@ async def test_generate_json_uses_schema_and_options() -> None:
         result = await provider.generate_json("system", "user", json_schema=schema)
 
     assert result["title"] == "Test"
-    call_kwargs = mock_client.post.call_args
-    payload = call_kwargs.kwargs["json"]
+    payload = mock_stream.captured["json"]
+    assert payload["stream"] is True
     assert payload["format"] == schema
     assert payload["options"]["num_predict"] == provider.num_predict
     assert payload["options"]["num_ctx"] == provider.num_ctx
@@ -57,21 +79,21 @@ async def test_generate_json_uses_schema_and_options() -> None:
 
 
 @pytest.mark.asyncio
-async def test_generate_json_recovers_braced_content() -> None:
+async def test_generate_json_recovers_braced_content_from_stream() -> None:
     provider = OllamaProvider(synthesis_model="qwen2.5:3b")
-    response_body = {
-        "message": {"content": 'noise {"title": "Recovered", "slides": []} trailing'},
-        "done_reason": "stop",
-        "eval_count": 5,
-        "prompt_eval_count": 10,
-    }
+    stream_line = json.dumps(
+        {
+            "message": {"content": 'noise {"title": "Recovered", "slides": []} trailing'},
+            "done": True,
+            "done_reason": "stop",
+            "eval_count": 5,
+            "prompt_eval_count": 10,
+        }
+    )
 
     with patch("httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = response_body
-        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client.stream = _stream_lines(stream_line)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
         mock_client_cls.return_value = mock_client
@@ -79,3 +101,28 @@ async def test_generate_json_recovers_braced_content() -> None:
         result = await provider.generate_json("system", "user")
 
     assert result["title"] == "Recovered"
+
+
+@pytest.mark.asyncio
+async def test_generate_json_accumulates_multiple_stream_chunks() -> None:
+    provider = OllamaProvider(synthesis_model="qwen2.5:3b")
+    first = json.dumps({"message": {"content": '{"title": "Chunked"'}, "done": False})
+    second = json.dumps(
+        {
+            "message": {"content": ', "slides": []}'},
+            "done": True,
+            "eval_count": 3,
+            "prompt_eval_count": 8,
+        }
+    )
+
+    with patch("httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.stream = _stream_lines(first, second)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_client_cls.return_value = mock_client
+
+        result = await provider.generate_json("system", "user")
+
+    assert result == {"title": "Chunked", "slides": []}

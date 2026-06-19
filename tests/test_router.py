@@ -57,7 +57,7 @@ async def test_synthesis_providers_raises_when_ollama_down_and_cloud_disabled() 
         patch.object(router.vllm, "is_available", new=AsyncMock(return_value=False)),
         patch.object(router.local, "is_available", new=AsyncMock(return_value=False)),
     ):
-        with pytest.raises(RuntimeError, match="cloud LLM is disabled"):
+        with pytest.raises(RuntimeError, match="cloud AI is disabled"):
             await router.get_synthesis_providers()
 
 

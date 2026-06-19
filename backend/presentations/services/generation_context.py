@@ -1,6 +1,5 @@
 """Resolve template path, layout profile, and generation mode for a request."""
 
-from presentations.config.settings import Settings, get_settings
 from presentations.core.schemas import GenerateRequest, GenerationMode, LayoutProfile
 from presentations.services.template_registry import get_template_registry
 
@@ -40,7 +39,6 @@ def resolve_generation_context(
     return resolved.template_path, resolved.layout_profile, mode
 
 
-def resolve_allow_cloud(request: GenerateRequest, settings: Settings | None = None) -> bool:
-    """Return whether cloud LLM providers may be used for this request."""
-    settings = settings or get_settings()
-    return request.allow_cloud or settings.allow_cloud_llm_default
+def resolve_allow_cloud(request: GenerateRequest) -> bool:
+    """Return whether the user explicitly opted in to cloud LLM providers."""
+    return request.allow_cloud

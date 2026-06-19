@@ -5,13 +5,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import httpx
 from loguru import logger
 from pydantic import ValidationError
 
 from presentations.config.settings import Settings, get_settings
 from presentations.core.layout_roles import (
     detect_column_count,
-    enforce_structural_layouts,
     layout_role_for_entry,
 )
 from presentations.core.schemas import (
@@ -22,8 +22,28 @@ from presentations.core.schemas import (
     SourceDigest,
 )
 from presentations.llm.base import LLMProvider
-from presentations.llm.layout_validate import validate_deck_against_layout
+from presentations.llm.layout_validate import (
+    layout_validation_errors,
+    sanitize_deck_spec,
+)
 from presentations.llm.router import LLMRouter
+
+_PROVIDER_VALIDATION_ERRORS = (ValidationError, ValueError, KeyError)
+_PROVIDER_TRANSIENT_ERRORS = (TimeoutError, httpx.TimeoutException, httpx.TransportError, RuntimeError)
+
+
+def _format_synthesis_failure(
+    last_error: Exception | None,
+    *,
+    provider_count: int,
+    allow_cloud: bool,
+) -> str:
+    """Build an actionable synthesis failure message."""
+    detail = str(last_error) if last_error else "unknown error"
+    message = f"Failed to synthesize deck after trying {provider_count} provider(s): {detail}"
+    if isinstance(last_error, TimeoutError) and not allow_cloud:
+        message += " Enable Cloud AI in the UI, use a faster local model, or increase OLLAMA_READ_TIMEOUT_GENERATE."
+    return message
 
 DECK_SYNTHESIS_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -100,6 +120,16 @@ Rules:
 - Use a layout with role "two-content" for comparisons or paired concepts when available.
 - Use agenda, quote, timeline, or team layouts when the brief content fits those patterns.
 - Slide 1 must use a layout with role "title" (title slide).
+- The slide 1 title placeholder must contain the actual presentation title from the brief;
+  never output the words "Title Slide", a layout name, or a placeholder name as content.
+- Section/chapter layouts are dividers (heading only); place substantive bullet content on
+  content, two-content, or picture layouts — not on section/chapter divider layouts.
+- For two-content/multi-column layouts, map content to every body ph_idx listed
+  (for example both the left and right column), not just one.
+- When the brief lists 3-4 parallel items or requirements, prefer a single two-content or
+  multi-column comparison slide over several single-column slides.
+- Body placeholders: use concise bullet points (at most ~12 words each, at most 5 per slide);
+  never paste full prose paragraphs — split prose into bullets.
 - The final slide should use a layout with role "closing" or "section" when available.
 - Do not use markdown formatting in content strings; write plain text only (no ** or * markers).
 - Keep bullet points concise but substantive; use \\n for line breaks within a placeholder.
@@ -142,10 +172,22 @@ def _format_brand_identity(theme: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _compact_layout(layout: LayoutProfile) -> dict[str, Any]:
+def _compact_layout(layout: LayoutProfile, *, include_geometry: bool = True) -> dict[str, Any]:
     """Return a token-efficient layout summary for synthesis prompts."""
-    return {
-        "layouts": [
+    placeholders: list[dict[str, Any]] = []
+    for idx, entry in sorted(layout.layouts.items()):
+        ph_entries: list[dict[str, Any]] = []
+        for ph in entry.placeholders:
+            ph_dict: dict[str, Any] = {"ph_idx": ph.index, "name": ph.name, "type": ph.type}
+            if include_geometry and ph.left is not None:
+                ph_dict["geometry_emu"] = {
+                    "left": ph.left,
+                    "top": ph.top,
+                    "width": ph.width,
+                    "height": ph.height,
+                }
+            ph_entries.append(ph_dict)
+        placeholders.append(
             {
                 "layout_index": idx,
                 "name": entry.name,
@@ -156,23 +198,10 @@ def _compact_layout(layout: LayoutProfile) -> dict[str, Any]:
                 "has_chart": entry.has_chart,
                 "has_table": entry.has_table,
                 "allowed_ph_idx": [ph.index for ph in entry.placeholders],
-                "placeholders": [
-                    {
-                        "ph_idx": ph.index,
-                        "name": ph.name,
-                        "type": ph.type,
-                        **(
-                            {"geometry_emu": {"left": ph.left, "top": ph.top, "width": ph.width, "height": ph.height}}
-                            if ph.left is not None
-                            else {}
-                        ),
-                    }
-                    for ph in entry.placeholders
-                ],
+                "placeholders": ph_entries,
             }
-            for idx, entry in sorted(layout.layouts.items())
-        ]
-    }
+        )
+    return {"layouts": placeholders}
 
 
 def _build_user_prompt(
@@ -181,10 +210,12 @@ def _build_user_prompt(
     mode: GenerationMode,
     source_context: str | None = None,
     max_source_chars: int | None = None,
+    *,
+    include_geometry: bool = True,
 ) -> str:
     """Build the user prompt for synthesis."""
     if layout:
-        layout_json = _compact_layout(layout)
+        layout_json = _compact_layout(layout, include_geometry=include_geometry)
         brand_block = _format_brand_identity(layout.theme)
     else:
         layout_json = {"layouts": "Use MD3 scratch layouts"}
@@ -287,22 +318,34 @@ async def digest_source_context(
         raise ValueError("No synthesis providers available for digest phase")
 
     chunks = _chunk_text(source_context, settings.digest_chunk_chars)
-    provider = providers[0]
     digests: list[SourceDigest] = []
 
     for index, chunk in enumerate(chunks, start=1):
-        try:
-            digest = await _digest_chunk_with_provider(provider, brief=brief, source_chunk=chunk)
-            digests.append(digest)
-            logger.info(
-                "Digest chunk {}/{} produced {} facts via {}",
-                index,
-                len(chunks),
-                len(digest.facts),
-                provider.name,
-            )
-        except (ValidationError, ValueError, KeyError) as exc:
-            logger.warning("Digest chunk {} failed: {}", index, exc)
+        chunk_digest: SourceDigest | None = None
+        for provider_index, provider in enumerate(providers):
+            if provider_index > 0:
+                logger.warning(
+                    "Falling back to {} for digest chunk {}/{}",
+                    provider.name,
+                    index,
+                    len(chunks),
+                )
+            try:
+                chunk_digest = await _digest_chunk_with_provider(provider, brief=brief, source_chunk=chunk)
+                logger.info(
+                    "Digest chunk {}/{} produced {} facts via {}",
+                    index,
+                    len(chunks),
+                    len(chunk_digest.facts),
+                    provider.name,
+                )
+                break
+            except _PROVIDER_TRANSIENT_ERRORS as exc:
+                logger.warning("Digest chunk {} with {} aborted: {}", index, provider.name, exc)
+            except _PROVIDER_VALIDATION_ERRORS as exc:
+                logger.warning("Digest chunk {} with {} failed: {}", index, provider.name, exc)
+        if chunk_digest is None:
+            logger.warning("Digest chunk {}/{} failed on all providers", index, len(chunks))
 
     return _merge_digests(digests)
 
@@ -346,14 +389,25 @@ def _payload_to_deck(
     mode: GenerationMode,
     layout: LayoutProfile | None,
 ) -> DeckSpec:
-    """Validate LLM payload and enforce layout constraints for template mode."""
+    """Validate LLM payload and enforce layout constraints for template mode.
+
+    Invalid layout indices and placeholder indices are sanitized in-place rather
+    than raising, so a slow local model does not waste a full retry on ph_idx
+    errors it is likely to repeat.  Pydantic ValidationError (broken JSON
+    schema) is still propagated so the retry loop can issue a corrective prompt.
+    """
     if title:
         payload["title"] = title
     payload["mode"] = mode.value
     deck = DeckSpec.model_validate(payload)
     if layout and mode == GenerationMode.TEMPLATE:
-        validate_deck_against_layout(deck, layout)
-        deck = enforce_structural_layouts(deck, layout)
+        errors = layout_validation_errors(deck, layout)
+        if errors:
+            logger.warning(
+                "Deck layout violations detected — sanitizing instead of retrying: {}",
+                "; ".join(errors),
+            )
+        deck = sanitize_deck_spec(deck, layout)
     return deck
 
 
@@ -372,7 +426,14 @@ async def _generate_with_provider(
     from presentations.llm.ollama_provider import OllamaProvider
 
     max_src = settings.ollama_max_source_context_chars if isinstance(provider, OllamaProvider) else None
-    base_prompt = _build_user_prompt(brief, layout, mode, source_context, max_source_chars=max_src)
+    base_prompt = _build_user_prompt(
+        brief,
+        layout,
+        mode,
+        source_context,
+        max_source_chars=max_src,
+        include_geometry=not isinstance(provider, OllamaProvider),
+    )
 
     last_error: Exception | None = None
     prompt = base_prompt
@@ -387,7 +448,9 @@ async def _generate_with_provider(
             else:
                 payload = await provider.generate_json(SYNTHESIS_SYSTEM_PROMPT, prompt)
             return _payload_to_deck(payload, title=title, mode=mode, layout=layout)
-        except (ValidationError, ValueError, KeyError) as exc:
+        except _PROVIDER_TRANSIENT_ERRORS:
+            raise
+        except _PROVIDER_VALIDATION_ERRORS as exc:
             last_error = exc
             logger.warning(
                 "Deck synthesis attempt {} with {} failed: {}",
@@ -470,12 +533,16 @@ async def synthesize_deck_spec(
                 getattr(provider, "model", getattr(provider, "synthesis_model", "unknown")),
             )
             return deck
-        except (ValidationError, ValueError, KeyError) as exc:
+        except (*_PROVIDER_VALIDATION_ERRORS, *_PROVIDER_TRANSIENT_ERRORS) as exc:
             last_error = exc
             if provider_index < len(providers) - 1:
                 continue
             raise ValueError(
-                f"Failed to synthesize deck after trying {len(providers)} provider(s)"
+                _format_synthesis_failure(
+                    last_error,
+                    provider_count=len(providers),
+                    allow_cloud=allow_cloud,
+                )
             ) from last_error
 
     raise ValueError("Failed to synthesize deck: no synthesis providers available") from last_error

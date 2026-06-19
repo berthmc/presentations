@@ -59,9 +59,10 @@ async def generate_presentation(request: GenerateRequest, *, job_id: str | None 
 
     with logger.contextualize(run_id=run_id, stage="-", revision="0"):
         logger.info(
-            "Pipeline started mode={} run_qa={} synthesis_model={} brief_chars={} source_chars={} max_revisions={}",
+            "Pipeline started mode={} run_qa={} allow_cloud={} synthesis_model={} brief_chars={} source_chars={} max_revisions={}",
             mode.value,
             request.run_qa,
+            request.allow_cloud,
             request.synthesis_model or "default",
             len(request.brief),
             len(request.source_context or ""),

@@ -31,6 +31,73 @@ def _has_placeholder_type(entry: LayoutEntry, *keywords: str) -> bool:
     return any(keyword in ph_type for ph_type in types for keyword in keywords)
 
 
+def body_placeholders(entry: LayoutEntry) -> list[PlaceholderInfo]:
+    """Return non-title body placeholders sorted by horizontal position."""
+    bodies: list[PlaceholderInfo] = []
+    for ph in entry.placeholders:
+        ph_type = ph.type.upper()
+        if any(keyword in ph_type for keyword in ("TITLE", "SLIDE_NUMBER", "FOOTER", "DATE", "HEADER")):
+            continue
+        if any(keyword in ph_type for keyword in ("BODY", "CONTENT", "OBJECT", "CENTER")):
+            bodies.append(ph)
+    bodies.sort(key=lambda placeholder: (placeholder.left or 0, placeholder.index))
+    return bodies
+
+
+def title_placeholder(entry: LayoutEntry) -> PlaceholderInfo | None:
+    """Return the primary title placeholder for a layout, if any."""
+    for ph in entry.placeholders:
+        if "TITLE" in ph.type.upper():
+            return ph
+    return None
+
+
+def slide_body_char_count(slide: SlideSpec, entry: LayoutEntry) -> int:
+    """Return total character count mapped to body placeholders on a slide."""
+    body_indices = {ph.index for ph in body_placeholders(entry)}
+    return sum(len(mapping.content) for mapping in slide.mappings if mapping.ph_idx in body_indices)
+
+
+def remap_content_off_dividers(deck, layout: LayoutProfile, *, char_threshold: int = 60):
+    """Remap interior slides with substantive body content off section/divider layouts."""
+    from presentations.core.schemas import DeckSpec
+
+    if not isinstance(deck, DeckSpec):
+        raise TypeError("remap_content_off_dividers expects a DeckSpec")
+
+    if len(deck.slides) <= 2 or not layout.layouts:
+        return deck
+
+    content_layouts = sorted(
+        index
+        for index, entry in layout.layouts.items()
+        if layout_role_for_entry(entry) == "content"
+    )
+    if not content_layouts:
+        return deck
+
+    target_layout = content_layouts[0]
+    slides = list(deck.slides)
+    changed = False
+
+    for index in range(1, len(slides) - 1):
+        slide = slides[index]
+        entry = layout.layouts.get(slide.layout_index)
+        if entry is None:
+            continue
+        role = layout_role_for_entry(entry)
+        if role not in {"section", "blank"}:
+            continue
+        if slide_body_char_count(slide, entry) <= char_threshold:
+            continue
+        slides[index] = _remap_slide_to_layout(slide, target_layout, layout)
+        changed = True
+
+    if changed:
+        return deck.model_copy(update={"slides": slides})
+    return deck
+
+
 def _content_placeholders(entry: LayoutEntry) -> list[PlaceholderInfo]:
     """Return placeholders that typically hold text content."""
     content: list[PlaceholderInfo] = []

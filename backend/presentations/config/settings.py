@@ -35,7 +35,6 @@ class Settings(BaseSettings):
     gemini_model: str = Field(default="gemini-2.0-flash", alias="GEMINI_MODEL")
     gemini_vision_model: str = Field(default="gemini-2.0-flash", alias="GEMINI_VISION_MODEL")
 
-    allow_cloud_llm_default: bool = Field(default=False, alias="ALLOW_CLOUD_LLM_DEFAULT")
     hardware_profile: str = Field(default="auto", alias="HARDWARE_PROFILE")
     qa_max_iterations: int = Field(default=3, alias="QA_MAX_ITERATIONS")
     qa_render_dpi: int = Field(default=150, alias="QA_RENDER_DPI")

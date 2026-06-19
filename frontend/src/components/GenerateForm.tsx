@@ -1,5 +1,5 @@
-import { useRef, useState, type ChangeEvent } from "react";
-import { downloadUrl, generateDeck, ingestPdf, qaSlideUrl } from "../api/client";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { downloadUrl, generateDeck, getModels, ingestPdf, qaSlideUrl } from "../api/client";
 import type { GenerateResult } from "../types";
 import { composeBrief, EXAMPLE_BRIEF } from "../utils/brief";
 import { ModelSelector } from "./ModelSelector";
@@ -35,6 +35,8 @@ export function GenerateForm({ templateId, templateSourceType, mode, onModeChang
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [synthesisModel, setSynthesisModel] = useState("auto");
   const [allowCloud, setAllowCloud] = useState(false);
+  const [localLlmAvailable, setLocalLlmAvailable] = useState(true);
+  const cloudConsentTouched = useRef(false);
   const [runQa, setRunQa] = useState(false);
   const [status, setStatus] = useState("");
   const [result, setResult] = useState<GenerateResult | null>(null);
@@ -90,6 +92,19 @@ export function GenerateForm({ templateId, templateSourceType, mode, onModeChang
 
   const geminiModelSelected = synthesisModel !== "auto" && isGeminiModelId(synthesisModel);
 
+  useEffect(() => {
+    getModels()
+      .then((payload) => {
+        const localAvailable = payload.models.some(
+          (model) => model.available && model.provider !== "gemini",
+        );
+        setLocalLlmAvailable(localAvailable);
+      })
+      .catch(() => {
+        setLocalLlmAvailable(true);
+      });
+  }, []);
+
   async function handlePdfUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const files = event.target.files;
     event.target.value = "";
@@ -124,6 +139,10 @@ export function GenerateForm({ templateId, templateSourceType, mode, onModeChang
   async function handleGenerate() {
     if (!topic.trim()) {
       setStatus("Enter a topic or details for the presentation.");
+      return;
+    }
+    if (!localLlmAvailable && !allowCloud && !geminiModelSelected) {
+      setStatus("Local Ollama/vLLM is unavailable. Enable Cloud AI or start a local LLM.");
       return;
     }
     if (mode === "template") {
@@ -347,11 +366,24 @@ export function GenerateForm({ templateId, templateSourceType, mode, onModeChang
             className="segmented-button__option"
             aria-pressed={allowCloud || geminiModelSelected}
             disabled={geminiModelSelected}
-            onClick={() => setAllowCloud((value) => !value)}
+            onClick={() => {
+              cloudConsentTouched.current = true;
+              setAllowCloud((value) => !value);
+            }}
           >
             Cloud AI
           </button>
         </div>
+        {!localLlmAvailable && !allowCloud && !geminiModelSelected && (
+          <p className="text-field__hint error">
+            Local Ollama/vLLM is unavailable. Enable Cloud AI to use Gemini, or start a local LLM.
+          </p>
+        )}
+        {!localLlmAvailable && (allowCloud || geminiModelSelected) && (
+          <p className="text-field__hint">
+            Local Ollama/vLLM is unavailable; generation will use Gemini via Vertex AI.
+          </p>
+        )}
         {geminiModelSelected && (
           <p className="text-field__hint">A Gemini model is selected; cloud AI is required for synthesis.</p>
         )}
